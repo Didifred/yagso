@@ -7,7 +7,10 @@ name = "yagso"
 version = "0.1.0"
 description = "A Python CLI utility"
 authors = [{name = "Your Name", email = "your.email@example.com"}]
-dependencies = []
+dependencies = [
+    "gitpython>=3.1.0",
+    "pyyaml>=6.0"
+]
 
-[project.scripts]
-yagso = "yagso.cli:main"
+[tool.setuptools.packages.find]
+include = ["yagso*"]

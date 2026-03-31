@@ -1,7 +1,7 @@
-"""Main entry point for YAGSO CLI."""
+"""Main entry point for YAGSO CLI package."""
 
 import sys
-from .cli.controller import CLIController
+from .controller import CLIController
 
 
 def main():
