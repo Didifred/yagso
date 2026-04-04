@@ -7,34 +7,32 @@ from dataclasses import dataclass
 @dataclass
 class SubmoduleDefinition:
     """Represents a single submodule configuration."""
-
-    name: str
+    name : str
     path: str
     url: str
-    branch: str
-    commit: Optional[str] = None
+    """ The branch to track for this submodule. Defaults to None if not specified. """
+    tracking_branch: Optional[str] = None
+    """ The specific ref (branch /tag / commit hash) for this submodule. """
+    ref: Optional[str] = None
 
     def __post_init__(self):
         """Validate the submodule definition after initialization."""
-        if not self.name:
-            raise ValueError("Submodule name cannot be empty")
         if not self.path:
             raise ValueError("Submodule path cannot be empty")
         if not self.url:
             raise ValueError("Submodule URL cannot be empty")
-        if not self.branch:
-            raise ValueError("Submodule branch cannot be empty")
 
     def to_dict(self) -> dict:
         """Convert to dictionary representation."""
         result = {
             "name": self.name,
             "path": self.path,
-            "url": self.url,
-            "branch": self.branch,
+            "url": self.url
         }
-        if self.commit:
-            result["commit"] = self.commit
+        if self.tracking_branch:
+            result["tracking_branch"] = self.tracking_branch
+        if self.ref:
+            result["ref"] = self.ref    
         return result
 
     @classmethod
@@ -44,6 +42,6 @@ class SubmoduleDefinition:
             name=data["name"],
             path=data["path"],
             url=data["url"],
-            branch=data["branch"],
-            commit=data.get("commit")
+            tracking_branch=data.get("tracking_branch"),
+            ref=data.get("ref")
         )

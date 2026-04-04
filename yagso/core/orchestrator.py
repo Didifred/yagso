@@ -44,7 +44,7 @@ class SubmoduleOrchestrator:
                         self.git_ops.clone_submodule(
                             submodule_def.url,
                             submodule_def.path,
-                            submodule_def.branch
+                            submodule_def.tracking_branch
                         )
                     else:
                         self.git_ops.update_submodule(submodule_def.path, options)

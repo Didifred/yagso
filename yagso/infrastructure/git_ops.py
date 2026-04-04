@@ -2,7 +2,6 @@
 
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-import git
 from git import Repo, Submodule
 
 from ..domain.submodule import SubmoduleDefinition

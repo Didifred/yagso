@@ -83,8 +83,9 @@ class ManifestManager:
         if not name or not path or not url:
             raise ValueError(f"Incomplete submodule definition: {block}")
 
-        # Extract branch from URL if it's a branch-specific URL
-        branch = "main"  # default
+        branch = block.get("branch", None)
+
+        # Submodule URLs should not end with a slash, as it can cause issues with git commands
         if url.endswith("/"):
             url = url[:-1]
 
@@ -92,5 +93,5 @@ class ManifestManager:
             name=name,
             path=path,
             url=url,
-            branch=branch
+            tracking_branch=branch
         )
