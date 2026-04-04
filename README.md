@@ -7,12 +7,8 @@ To build the Python package, ensure you have Python 3.8+ installed and follow th
 
 1. Clone the repository and navigate to the project directory.
 
-2. Create a virtual environment (remove any existing `.venv` directory first if needed):
+2. Create a virtual environment:
    ```bash
-   # If .venv already exists and is active, deactivate first or remove it
-   # deactivate  # if active
-   # rm -rf .venv  # on Linux/macOS, or rmdir /s .venv on Windows
-   
    python -m venv .venv
    ```
 
@@ -41,10 +37,18 @@ Install the package using pip:
 pip install dist/yagso-0.1.0-py3-none-any.whl
 ```
 
-Or install in editable mode for development:
-```bash
-pip install -e .
-```
+## Developement
+
+1. Clone the repository and open worspace in VS Code.
+
+2. Create a virtual environment (once):
+   ```bash
+   python -m venv .venv
+   ```
+3. Install dependencies in editable mode for development:
+   ```bash
+   pip install -e .
+   ```
 
 ## Usage
 

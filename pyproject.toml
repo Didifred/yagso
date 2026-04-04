@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "yagso"
 version = "0.1.0"
 description = "A Python CLI utility"
-authors = [{name = "Your Name", email = "your.email@example.com"}]
+authors = [{name = "didifred", email = "didifred.web@gmail.com"}]
 dependencies = [
     "gitpython>=3.1.0",
     "pyyaml>=6.0"

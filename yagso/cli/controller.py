@@ -17,6 +17,8 @@ from ..core.handlers import (
 
 class CLIController:
     """Main entry point, command routing, argument parsing."""
+    SUCCESS = 0
+    FAILURE = -1
 
     def __init__(self):
         self.parser = ArgumentParser()
@@ -24,11 +26,12 @@ class CLIController:
 
     def run(self, args: list) -> int:
         """Parse arguments and dispatch to appropriate command."""
+
         try:
             options = self.parser.parse(args)
 
             if not options.get("command"):
-                return 0  # Help was shown or no command specified
+                return self.SUCCESS  # Help was shown or no command specified
 
             self.parser.validate(options)
 
@@ -38,9 +41,9 @@ class CLIController:
                 repo_path = Path(options["root_path"])
 
             # Check if it's a git repository (except for generate which can create manifest)
-            if options["command"] != "generate" and not (repo_path / ".git").exists():
+            if not (repo_path / ".git").exists():
                 self.formatter.error(f"Not a Git repository: {repo_path}")
-                return 1
+                return self.FAILURE
 
             # Create orchestrator and handler
             orchestrator = SubmoduleOrchestrator(repo_path)
@@ -49,20 +52,20 @@ class CLIController:
             # Execute command
             handler.execute(options)
 
-            return 0
+            return self.SUCCESS
 
         except ValueError as e:
             self.formatter.error(str(e))
-            return 1
+            return self.FAILURE
         except FileNotFoundError as e:
             self.formatter.error(str(e))
-            return 1
+            return self.FAILURE
         except RuntimeError as e:
             self.formatter.error(str(e))
-            return 1
+            return self.FAILURE
         except Exception as e:
             self.formatter.error(f"Unexpected error: {e}")
-            return 1
+            return self.FAILURE
 
     def _create_handler(self, command: str, orchestrator: SubmoduleOrchestrator):
         """Create appropriate handler for command."""

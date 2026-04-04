@@ -1,11 +1,10 @@
 """Command handlers for YAGSO CLI."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any
 from pathlib import Path
-
-if TYPE_CHECKING:
-    from ..orchestrator import SubmoduleOrchestrator
+from ..orchestrator import SubmoduleOrchestrator
+from ...cli.formatter import OutputFormatter
 
 
 class CommandHandler(ABC):
@@ -21,14 +20,6 @@ class CommandHandler(ABC):
 
 
 """Command handlers for YAGSO CLI."""
-
-from abc import ABC, abstractmethod
-from typing import Dict, Any, TYPE_CHECKING
-from pathlib import Path
-
-if TYPE_CHECKING:
-    from ..orchestrator import SubmoduleOrchestrator
-
 
 class CommandHandler(ABC):
     """Base class for command handlers."""
@@ -47,7 +38,6 @@ class GenerateHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         """Generate manifest from repository."""
-        from ...cli.formatter import OutputFormatter
         formatter = OutputFormatter()
 
         root_path = options.get("root_path")
@@ -68,7 +58,6 @@ class UpdateHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         """Update submodules."""
-        from ...cli.formatter import OutputFormatter
         formatter = OutputFormatter()
 
         self.orchestrator.update_submodules(options)
@@ -82,7 +71,6 @@ class ConfigureHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         """Apply manifest configuration."""
-        from ...cli.formatter import OutputFormatter
         formatter = OutputFormatter()
 
         self.orchestrator.configure_repository()
@@ -94,7 +82,6 @@ class CommitHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         """Commit changes."""
-        from ...cli.formatter import OutputFormatter
         formatter = OutputFormatter()
 
         message = options.get("message", "")
@@ -110,7 +97,6 @@ class PushHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         """Push changes."""
-        from ...cli.formatter import OutputFormatter
         formatter = OutputFormatter()
 
         self.orchestrator.push_changes()
