@@ -14,3 +14,8 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 include = ["yagso*"]
+
+
+[tool.autopep8]
+max_line_length = 100
+aggressive = 2
