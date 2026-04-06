@@ -18,7 +18,7 @@ from ..core.handlers import (
 class CLIController:
     """Main entry point, command routing, argument parsing."""
     SUCCESS = 0
-    FAILURE = -1
+    FAILURE = 1
 
     def __init__(self):
         self.parser = ArgumentParser()

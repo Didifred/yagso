@@ -15,31 +15,43 @@ class Manifest:
         """Validate manifest integrity."""
         if not self.submodules:
             raise ValueError("Manifest must contain at least one submodule")
-
         names = set()
         paths = set()
-        for submodule in self.submodules:
-            if not submodule.name:
-                raise ValueError("Submodule name cannot be empty")
-            if not submodule.path:
-                raise ValueError("Submodule path cannot be empty")
-            if not submodule.url:
-                raise ValueError("Submodule URL cannot be empty")
 
-            if submodule.name in names:
-                raise ValueError(f"Duplicate submodule name: {submodule.name}")
-            if submodule.path in paths:
-                raise ValueError(f"Duplicate submodule path: {submodule.path}")
+        def _collect(subs):
+            for sub in subs:
+                if not sub.name:
+                    raise ValueError("Submodule name cannot be empty")
+                if not sub.path:
+                    raise ValueError("Submodule path cannot be empty")
+                if not sub.url:
+                    raise ValueError("Submodule URL cannot be empty")
 
-            names.add(submodule.name)
-            paths.add(submodule.path)
+                if sub.name in names:
+                    raise ValueError(f"Duplicate submodule name: {sub.name}")
+                if sub.path in paths:
+                    raise ValueError(f"Duplicate submodule path: {sub.path}")
+
+                names.add(sub.name)
+                paths.add(sub.path)
+
+                if getattr(sub, 'submodules', None):
+                    _collect(sub.submodules)
+
+        _collect(self.submodules)
 
     def get_submodule(self, name: str) -> Optional[SubmoduleDefinition]:
         """Retrieve submodule by name."""
-        for submodule in self.submodules:
-            if submodule.name == name:
-                return submodule
-        return None
+        def _find(subs):
+            for s in subs:
+                if s.name == name:
+                    return s
+                res = _find(s.submodules)
+                if res:
+                    return res
+            return None
+
+        return _find(self.submodules)
 
     def to_dict(self) -> dict:
         """Convert to dictionary representation."""
@@ -51,21 +63,6 @@ class Manifest:
     @classmethod
     def from_dict(cls, data: dict) -> 'Manifest':
         """Create Manifest from dictionary representation."""
-        from .submodule import SubmoduleDefinition
-
         version = data.get("version", "1.0")
-        submodules_data = data.get("submodules", [])
-
-        submodules = []
-        for sub_data in submodules_data:
-            submodules.append(SubmoduleDefinition.from_dict(sub_data))
-
+        submodules = [SubmoduleDefinition.from_dict(s) for s in data.get("submodules", [])]
         return cls(submodules=submodules, version=version)
-
-    @classmethod
-    def from_dict(cls, data: dict) -> 'Manifest':
-        """Create from dictionary representation."""
-        return cls(
-            version=data.get("version", "1.0"),
-            submodules=[SubmoduleDefinition.from_dict(sub) for sub in data["submodules"]],
-        )
