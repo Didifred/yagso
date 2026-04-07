@@ -80,11 +80,9 @@ class GitOperations:
                 # This reads from .gitmodules without defaults
                 reader = submodule.config_reader()
                 tracking_branch = reader.get_value('branch')
-                print(f"{submodule.name}: tracks '{tracking_branch}'")
             except Exception:
                 # No 'branch' key in .gitmodules
                 tracking_branch = None
-                print(f"{submodule.name}: no tracking branch configured")
 
             submodules.append({
                 "name": submodule.name,
