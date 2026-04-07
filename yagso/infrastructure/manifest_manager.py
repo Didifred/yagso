@@ -79,14 +79,24 @@ class ManifestManager:
             raise FileNotFoundError(
                 f"No .gitmodules file found in {root_path}")
 
-        submodules = self._parse_file(root_path, prefix_path=Path(""))
+        submodules = self._parse_submodule(root_path, prefix_path=Path(""))
 
         if not submodules:
             raise ValueError("No submodules found in .gitmodules")
 
         return Manifest(submodules=submodules)
 
-    def _parse_file(self, repo_fs_path: Path, prefix_path: Path = Path("")) -> list:
+    def _parse_submodule(self, repo_fs_path: Path, prefix_path: Path = Path("")) -> list:
+        """Parse submodule definitions from a .gitmodules file at the given repository filesystem path,
+        using GitPython to obtain commit information.
+
+        Args:
+            repo_fs_path (Path): Filesystem path to the repository containing the .gitmodules file to parse.
+            prefix_path (Path, optional): The submodule relative path. Defaults to Path("").
+
+        Returns:
+            list: list of SubmoduleDefinition objects representing the submodules defined in the .gitmodules file.
+        """
         gm = repo_fs_path / ".gitmodules"
         if not gm.exists():
             return []
@@ -159,9 +169,13 @@ class ManifestManager:
                 f"Unable to determine recorded commit for submodule '{name}' at path '{path}' in repository {repo_fs_path}")
 
         # prepare submodule definition
+
+        # Keep `path` as declared in the submodule definition (relative to
+        # that repository) — do not expand to a full relative path from the
+        # top-level repo. This preserves the original git submodule `path`.
         sub = SubmoduleDefinition(
             name=name,
-            path=full_rel_norm,
+            path=Path(path).as_posix().lstrip('/'),
             url=url,
             commit=commit,
             tracking_branch=branch,
@@ -181,7 +195,7 @@ class ManifestManager:
 
         # recurse into the submodule folder if it exists and contains its own .gitmodules
         if child_fs_path.exists() and (child_fs_path / '.gitmodules').exists():
-            child_subs = self._parse_file(child_fs_path, prefix_path=full_rel)
+            child_subs = self._parse_submodule(child_fs_path, prefix_path=full_rel)
             if child_subs:
                 sub.submodules = child_subs
 
