@@ -1,11 +1,10 @@
 """Infrastructure layer for manifest file operations."""
 
 import yaml
-import subprocess
-import re
 from pathlib import Path
 from typing import Optional, List
 
+from .git_ops import GitOperations
 from ..domain.manifest import Manifest
 from ..domain.submodule import SubmoduleDefinition
 
@@ -88,126 +87,102 @@ class ManifestManager:
         return Manifest(submodules=submodules)
 
     def _parse_file(self, repo_fs_path: Path, prefix_path: Path = Path("")) -> list:
-        """Parse a .gitmodules file and return a list of SubmoduleDefinition objects.
-
-        Args:
-            repo_fs_path (Path): path to the repository folder containing .gitmodules
-            prefix_path (Path, optional): prefix to apply to nested paths when computing full relative path
-
-        Returns:
-            list: list of SubmoduleDefinition instances (children attached)
-        """
         gm = repo_fs_path / ".gitmodules"
         if not gm.exists():
             return []
 
-        blocks = []
-        current = {}
-        try:
-            with open(gm, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith('[submodule'):
-                        if current:
-                            blocks.append(current)
-                        # extract name between quotes
-                        try:
-                            nm = line.split('"')[1]
-                        except Exception:
-                            nm = ''
-                        current = {"name": nm}
-                    elif line and '=' in line:
-                        key, value = line.split('=', 1)
-                        current[key.strip()] = value.strip()
-
-                if current:
-                    blocks.append(current)
-        except IOError as e:
-            raise IOError(f"Failed to read .gitmodules at {gm}: {e}")
+        git_ops = GitOperations(repo_fs_path)
+        blocks = self._read_gitmodules_blocks(git_ops)
 
         results = []
         for block in blocks:
-            name = block.get("name", block.get("path", ""))
-            path = block.get("path", name)
-            url = block.get("url", "")
-
-            if not name or not path or not url:
-                raise ValueError(f"Incomplete submodule definition: {block}")
-
-            branch = block.get("branch")
-
-            # compute full relative path from the top-level root
-            if prefix_path and str(prefix_path).strip():
-                full_rel = prefix_path / path
-            else:
-                full_rel = Path(path)
-            full_rel_norm = full_rel.as_posix().lstrip('/')
-
-            # normalize url (remove trailing slash)
-            url = url.rstrip('/')
-
-            # determine the commit SHA recorded in this repository for the submodule path
-            commit = None
-            try:
-                proc = subprocess.run([
-                    "git", "ls-tree", "HEAD", "--", path
-                ], cwd=str(repo_fs_path), capture_output=True, text=True)
-                out = proc.stdout.strip()
-                if out:
-                    m = re.search(r"commit\s+([0-9a-fA-F]{7,40})", out)
-                    if m:
-                        commit = m.group(1)
-            except Exception:
-                commit = None
-
-            # commit is required — fail fast if we couldn't determine it
-            if not commit:
-                raise ValueError(
-                    f"Unable to determine recorded commit for submodule '{name}' at path '{path}' in repository {repo_fs_path}")
-
-            # prepare submodule definition
-            sub = SubmoduleDefinition(
-                name=name,
-                path=full_rel_norm,
-                url=url,
-                commit=commit,
-                tracking_branch=branch,
-            )
-
-            # if we have a commit and the submodule worktree exists, try to discover refs
-            refs: List[str] = []
-            child_fs_path = repo_fs_path / path
-            try:
-                if commit and child_fs_path.exists():
-                    # ensure this is a git repo (handles .git file pointing to gitdir)
-                    rproc = subprocess.run(["git",
-                                            "-C",
-                                            str(child_fs_path),
-                                            "rev-parse",
-                                            "--git-dir"],
-                                           capture_output=True,
-                                           text=True)
-                    if rproc.returncode == 0:
-                        # list branches/tags/remotes that contain this commit
-                        refproc = subprocess.run([
-                            "git", "-C", str(child_fs_path),
-                            "for-each-ref", "--format=%(refname:short)", "--contains", commit,
-                            "refs/heads", "refs/tags", "refs/remotes"
-                        ], capture_output=True, text=True)
-                        if refproc.returncode == 0 and refproc.stdout.strip():
-                            refs = [r.strip() for r in refproc.stdout.splitlines() if r.strip()]
-            except Exception:
-                refs = []
-
-            if refs:
-                sub.ref = refs
-
-            # recurse into the submodule folder if it exists and contains its own .gitmodules
-            if child_fs_path.exists() and (child_fs_path / '.gitmodules').exists():
-                child_subs = self._parse_file(child_fs_path, prefix_path=full_rel)
-                if child_subs:
-                    sub.submodules = child_subs
-
+            sub = self._build_submodule_from_block(block, repo_fs_path, prefix_path, git_ops)
             results.append(sub)
 
         return results
+
+    def _read_gitmodules_blocks(self, git_ops: GitOperations) -> list:
+        """Return parsed submodule blocks using GitPython via `git_ops`.
+
+        Uses `git_ops.get_submodules()` to obtain submodule entries and
+        converts them to the same simple block dict format previously
+        produced by parsing the .gitmodules file.
+        """
+        blocks = []
+        try:
+            for item in git_ops.get_submodules():
+                block = {
+                    "name": item.get("name"),
+                    "path": item.get("path"),
+                    "url": item.get("url"),
+                }
+                if item.get("branch"):
+                    block["branch"] = item.get("branch")
+                blocks.append(block)
+        except Exception as e:
+            raise IOError(f"Failed to read submodules via GitPython: {e}")
+
+        return blocks
+
+    def _build_submodule_from_block(
+            self,
+            block: dict,
+            repo_fs_path: Path,
+            prefix_path: Path,
+            git_ops: GitOperations) -> SubmoduleDefinition:
+        """Construct a SubmoduleDefinition from a parsed .gitmodules block using git_ops for git info."""
+        name = block.get("name", block.get("path", ""))
+        path = block.get("path", name)
+        url = block.get("url", "")
+
+        if not name or not path or not url:
+            raise ValueError(f"Incomplete submodule definition: {block}")
+
+        branch = block.get("branch")
+
+        # compute full relative path from the top-level root
+        if prefix_path and str(prefix_path).strip():
+            full_rel = prefix_path / path
+        else:
+            full_rel = Path(path)
+        full_rel_norm = full_rel.as_posix().lstrip('/')
+
+        # normalize url (remove trailing slash)
+        url = url.rstrip('/')
+
+        # determine the commit SHA recorded in this repository for the submodule path
+        commit = git_ops.get_recorded_commit(path)
+
+        # commit is required — fail fast if we couldn't determine it
+        if not commit:
+            raise ValueError(
+                f"Unable to determine recorded commit for submodule '{name}' at path '{path}' in repository {repo_fs_path}")
+
+        # prepare submodule definition
+        sub = SubmoduleDefinition(
+            name=name,
+            path=full_rel_norm,
+            url=url,
+            commit=commit,
+            tracking_branch=branch,
+        )
+
+        # if we have a commit and the submodule worktree exists, try to discover refs
+        refs: List[str] = []
+        child_fs_path = repo_fs_path / path
+        try:
+            if commit and child_fs_path.exists():
+                refs = git_ops.get_refs_containing_commit_at_path(child_fs_path, commit)
+        except Exception:
+            refs = []
+
+        if refs:
+            sub.ref = refs
+
+        # recurse into the submodule folder if it exists and contains its own .gitmodules
+        if child_fs_path.exists() and (child_fs_path / '.gitmodules').exists():
+            child_subs = self._parse_file(child_fs_path, prefix_path=full_rel)
+            if child_subs:
+                sub.submodules = child_subs
+
+        return sub

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+import re
 from git import Repo, Submodule
 
 from ..domain.submodule import SubmoduleDefinition
@@ -25,15 +26,71 @@ class GitOperations:
                 raise ValueError(f"Not a valid Git repository: {self.repo_path}")
         return self._repo
 
+    def get_recorded_commit(self, path: str) -> Optional[str]:
+        """Return the commit SHA recorded in HEAD for the gitlink at `path`.
+
+        Uses git ls-tree to read the tree entry for the path and extracts the commit hash.
+        """
+        try:
+            out = self.repo.git.ls_tree('HEAD', '--', path)
+        except git.GitCommandError:
+            return None
+
+        out = (out or '').strip()
+        if not out:
+            return None
+
+        # Expect a line like: "160000 commit <sha>\t<path>"
+        m = re.search(r"commit\s+([0-9a-fA-F]{7,40})", out)
+        if m:
+            return m.group(1)
+        return None
+
+    def get_refs_containing_commit_at_path(self, worktree_path: Path, commit: str) -> List[str]:
+        """Return a list of refs (local branches, tags, and remote branches/tags)
+        in the worktree at `worktree_path` that contain `commit`.
+
+        Excludes symbolic `HEAD` refs (e.g. `HEAD` or `origin/HEAD`). If the
+        worktree is not a git repository or the command fails, returns an empty list.
+        """
+        try:
+            sub_repo = Repo(worktree_path)
+        except git.InvalidGitRepositoryError:
+            return []
+
+        try:
+            out = sub_repo.git.for_each_ref('--format=%(refname:short)', '--contains', commit,
+                                            'refs/heads', 'refs/tags', 'refs/remotes')
+        except git.GitCommandError:
+            return []
+
+        if not out:
+            return []
+
+        # Build list and exclude any HEAD refs (local or remote symbolic refs)
+        refs = [r.strip() for r in out.splitlines() if r.strip()]
+        filtered = [r for r in refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
+        return filtered
+
     def get_submodules(self) -> List[Dict[str, Any]]:
         """List all submodules in the repository."""
         submodules = []
         for submodule in self.repo.submodules:
+            try:
+                # This reads from .gitmodules without defaults
+                reader = submodule.config_reader()
+                tracking_branch = reader.get_value('branch')
+                print(f"{submodule.name}: tracks '{tracking_branch}'")
+            except Exception:
+                # No 'branch' key in .gitmodules
+                tracking_branch = None
+                print(f"{submodule.name}: no tracking branch configured")
+
             submodules.append({
                 "name": submodule.name,
                 "path": submodule.path,
                 "url": submodule.url,
-                "branch": getattr(submodule, 'branch', 'main'),
+                "branch": tracking_branch,
                 "commit": submodule.hexsha if submodule.hexsha else None,
             })
         return submodules
