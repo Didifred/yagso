@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import re
+import git
 from git import Repo, Submodule
 
 from ..domain.submodule import SubmoduleDefinition
@@ -59,7 +60,8 @@ class GitOperations:
             return []
 
         try:
-            out = sub_repo.git.for_each_ref('--format=%(refname:short)', '--contains', commit,
+            # Only list refs that point at the exact commit (no "contains").
+            out = sub_repo.git.for_each_ref('--format=%(refname:short)', '--points-at', commit,
                                             'refs/heads', 'refs/tags', 'refs/remotes')
         except git.GitCommandError:
             return []

@@ -174,6 +174,7 @@ class ManifestManager:
         # that repository) — do not expand to a full relative path from the
         # top-level repo. This preserves the original git submodule `path`.
         sub = SubmoduleDefinition(
+            root_path=full_rel_norm,
             name=name,
             path=Path(path).as_posix().lstrip('/'),
             url=url,

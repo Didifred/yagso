@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 @dataclass
 class SubmoduleDefinition:
     """Represents a single submodule configuration."""
+    root_path: str
     name: str
     path: str
     url: str
@@ -20,6 +21,8 @@ class SubmoduleDefinition:
 
     def __post_init__(self):
         """Validate the submodule definition after initialization."""
+        if not self.root_path:
+            raise ValueError("Root path of submodule cannot be empty")
         if not self.name:
             raise ValueError("Submodule name cannot be empty")
         if not self.path:
@@ -32,6 +35,7 @@ class SubmoduleDefinition:
     def to_dict(self) -> dict:
         """Convert to dictionary representation."""
         result = {
+            "root_path": self.root_path,
             "name": self.name,
             "path": self.path,
             "url": self.url,
@@ -56,6 +60,7 @@ class SubmoduleDefinition:
                     data.get(
                         'name', '<unknown>')}")
         return cls(
+            root_path=data["root_path"],
             name=data["name"],
             path=data["path"],
             url=data["url"],
