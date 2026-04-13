@@ -49,6 +49,10 @@ class ArgumentParser:
             "configure",
             help="Apply manifest configuration to repository"
         )
+        configure_parser.add_argument(
+            "--root-path",
+            help="Root path of the Git repository (default: current directory)"
+        )
 
         # commit command
         commit_parser = subparsers.add_parser(
@@ -91,6 +95,10 @@ class ArgumentParser:
             if hasattr(parsed, "root_path") and parsed.root_path:
                 options["root_path"] = parsed.root_path
 
+        elif parsed.command == "configure":
+            if hasattr(parsed, "root_path") and parsed.root_path:
+                options["root_path"] = parsed.root_path
+
         elif parsed.command == "update":
             options["init"] = getattr(parsed, "init", False)
             options["remote"] = getattr(parsed, "remote", False)
@@ -98,7 +106,7 @@ class ArgumentParser:
         elif parsed.command == "commit":
             options["message"] = getattr(parsed, "message", "")
 
-        # configure and push have no additional options
+        #  push have no additional options
 
         return options
 

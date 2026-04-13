@@ -21,6 +21,7 @@ class CommandHandler(ABC):
 
 """Command handlers for YAGSO CLI."""
 
+
 class CommandHandler(ABC):
     """Base class for command handlers."""
 
@@ -73,7 +74,16 @@ class ConfigureHandler(CommandHandler):
         """Apply manifest configuration."""
         formatter = OutputFormatter()
 
-        self.orchestrator.configure_repository()
+        root_path = options.get("root_path")
+        if root_path:
+            root_path = Path(root_path)
+        else:
+            root_path = Path.cwd()
+
+        if not (root_path / ".git").exists():
+            raise ValueError(f"Not a Git repository: {root_path}")
+
+        self.orchestrator.configure_repository(root_path)
         formatter.success("Repository configured according to manifest")
 
 

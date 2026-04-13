@@ -3,6 +3,7 @@ import sys
 from io import StringIO
 from yagso.cli.controller import CLIController
 
+
 class TestCli(unittest.TestCase):
     def test_controller_creation(self):
         """Test that CLIController can be created."""
@@ -22,7 +23,6 @@ class TestCli(unittest.TestCase):
         result = controller.run(['invalid'])
         self.assertEqual(result, 1)
 
-
     def test_generate_command(self):
         """Test that generate command works."""
         controller = CLIController()
@@ -37,6 +37,22 @@ class TestCli(unittest.TestCase):
 
         # Restore stdout
         sys.stdout = sys.__stdout__
+
+    def test_configure_command(self):
+        """Test that configure command works."""
+        controller = CLIController()
+        # Capture output
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        result = controller.run(['configure', '--root-path', 'tests/sample1/yagso_test_root'])
+        self.assertEqual(result, 0)
+        output = captured_output.getvalue()
+        self.assertIn("Repository configured according to manifest", output)
+
+        # Restore stdout
+        sys.stdout = sys.__stdout__
+
 
 if __name__ == "__main__":
     unittest.main()

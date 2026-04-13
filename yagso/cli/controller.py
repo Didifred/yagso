@@ -37,7 +37,7 @@ class CLIController:
 
             # Determine repository path
             repo_path = Path.cwd()
-            if options.get("command") == "generate" and options.get("root_path"):
+            if options.get("root_path"):
                 repo_path = Path(options["root_path"])
 
             # Check if it's a git repository (except for generate which can create manifest)
