@@ -1,9 +1,10 @@
 """Core business logic orchestrator for YAGSO."""
 
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from ..domain.manifest import Manifest
+from ..domain.submodule import SubmoduleDefinition
 from ..infrastructure.git_ops import GitOperations
 from ..infrastructure.manifest_manager import ManifestManager
 
@@ -55,42 +56,41 @@ class SubmoduleOrchestrator:
             except Exception as e:
                 raise RuntimeError(f"Failed to process submodule {submodule_def.name}: {e}")
 
-    def configure_repository(self) -> None:
+    def configure_repository(self, root_path: Optional[Path] = None) -> None:
         """Apply manifest configuration to repository."""
-        manifest_path = self.repo_path / "yagso.yaml"
+        if root_path is None:
+            root_path = self.repo_path
+
+        manifest_path = root_path / "yagso.yaml"
         if not manifest_path.exists():
             raise FileNotFoundError("yagso.yaml manifest not found. Run 'yagso generate' first.")
 
         manifest = self.manifest_manager.load_manifest(manifest_path)
 
-        # For now, this is mainly a validation step
-        # Future enhancements could apply additional configuration
+        # Validate the manifest before applying configuration
         manifest.validate()
 
-        # Ensure .gitmodules matches manifest
-        self._sync_gitmodules(manifest)
+        # Sync submodules with manifest configuration (e.g., .gitmodules, .git/config)
+        self._sync_submodules(manifest)
 
-    def _sync_gitmodules(self, manifest: Manifest) -> None:
-        """Sync .gitmodules file with manifest."""
-        gitmodules_path = self.repo_path / ".gitmodules"
+    def _sync_submodules(self, manifest: Manifest) -> None:
+        """Sync submodules with manifest. """
 
-        # Generate .gitmodules content from manifest
-        content = ""
-        for submodule in manifest.submodules:
-            content += f'[submodule "{submodule.name}"]\n'
-            content += f'\tpath = {submodule.path}\n'
-            content += f'\turl = {submodule.url}\n'
-            content += '\n'
+        submodules = manifest.submodules
 
-        # Write .gitmodules
-        with open(gitmodules_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+        self._sync_child_submodules(submodules)
 
-        # Add to git if not already tracked
-        try:
-            self.git_ops.repo.git.add(".gitmodules")
-        except Exception:
-            pass  # Ignore if already added
+    def _sync_child_submodules(self, submodules: List[SubmoduleDefinition]) -> None:
+        childs = []
+
+        for submodule in submodules:
+            if submodule.submodules:
+                childs.append(submodule.submodules)
+
+            self.git_ops.sync_submodule(submodule)
+
+        for submodules in childs:
+            self._sync_child_submodules(submodules)
 
     def commit_changes(self, message: str) -> None:
         """Commit all changes recursively."""

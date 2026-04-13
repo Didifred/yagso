@@ -11,34 +11,41 @@ class Manifest:
     submodules: List[SubmoduleDefinition]
     version: str = "1.0"
 
+    def _collect(self, subs, root_paths) -> None:
+        """Recursively collect and validate submodule root paths."""
+        status = None
+
+        for sub in subs:
+            if not sub.name:
+                raise ValueError("Submodule name cannot be empty")
+            if not sub.path:
+                raise ValueError("Submodule path cannot be empty")
+            if not sub.url:
+                raise ValueError("Submodule URL cannot be empty")
+            if not sub.commit:
+                raise ValueError("Submodule commit hash cannot be empty")
+            if not sub.root_path:
+                raise ValueError("Submodule root path cannot be empty")
+
+            if sub.root_path in root_paths:
+                raise ValueError(f"Duplicate submodule root path: {sub.root_path}")
+
+            root_paths.add(sub.root_path)
+
+            if getattr(sub, 'submodules', None):
+                status = self._collect(sub.submodules, root_paths)
+
+        return status
+
     def validate(self) -> None:
         """Validate manifest integrity."""
         if not self.submodules:
             raise ValueError("Manifest must contain at least one submodule")
-        names = set()
-        paths = set()
 
-        def _collect(subs):
-            for sub in subs:
-                if not sub.name:
-                    raise ValueError("Submodule name cannot be empty")
-                if not sub.path:
-                    raise ValueError("Submodule path cannot be empty")
-                if not sub.url:
-                    raise ValueError("Submodule URL cannot be empty")
+        root_paths = set()
+        status = self._collect(self.submodules, root_paths)
 
-                if sub.name in names:
-                    raise ValueError(f"Duplicate submodule name: {sub.name}")
-                if sub.path in paths:
-                    raise ValueError(f"Duplicate submodule path: {sub.path}")
-
-                names.add(sub.name)
-                paths.add(sub.path)
-
-                if getattr(sub, 'submodules', None):
-                    _collect(sub.submodules)
-
-        _collect(self.submodules)
+        return status
 
     def get_submodule(self, name: str) -> Optional[SubmoduleDefinition]:
         """Retrieve submodule by name."""
