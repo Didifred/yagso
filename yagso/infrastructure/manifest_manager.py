@@ -102,7 +102,7 @@ class ManifestManager:
             return []
 
         git_ops = GitOperations(repo_fs_path)
-        blocks = self._read_gitmodules_blocks(git_ops)
+        blocks = git_ops.read_gitmodules_blocks()
 
         results = []
         for block in blocks:
@@ -110,29 +110,6 @@ class ManifestManager:
             results.append(sub)
 
         return results
-
-    def _read_gitmodules_blocks(self, git_ops: GitOperations) -> list:
-        """Return parsed submodule blocks using GitPython via `git_ops`.
-
-        Uses `git_ops.get_submodules()` to obtain submodule entries and
-        converts them to the same simple block dict format previously
-        produced by parsing the .gitmodules file.
-        """
-        blocks = []
-        try:
-            for item in git_ops.get_submodules():
-                block = {
-                    "name": item.get("name"),
-                    "path": item.get("path"),
-                    "url": item.get("url"),
-                }
-                if item.get("branch"):
-                    block["branch"] = item.get("branch")
-                blocks.append(block)
-        except Exception as e:
-            raise IOError(f"Failed to read submodules via GitPython: {e}")
-
-        return blocks
 
     def _build_submodule_from_block(
             self,
