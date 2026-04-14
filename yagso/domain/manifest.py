@@ -43,9 +43,7 @@ class Manifest:
             raise ValueError("Manifest must contain at least one submodule")
 
         root_paths = set()
-        status = self._collect(self.submodules, root_paths)
-
-        return status
+        self._collect(self.submodules, root_paths)
 
     def get_submodule(self, name: str) -> Optional[SubmoduleDefinition]:
         """Retrieve submodule by name."""

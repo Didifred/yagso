@@ -95,6 +95,30 @@ class GitOperations:
             })
         return submodules
 
+    def read_gitmodules_blocks(self) -> list:
+        """Return parsed submodule blocks using GitPython.
+
+        Uses `self.get_submodules()` to obtain submodule entries and
+        converts them to the same simple block dict format previously
+        produced by parsing the .gitmodules file.
+        """
+        blocks = []
+        try:
+            for item in self.get_submodules():
+                block = {
+                    "name": item.get("name"),
+                    "path": item.get("path"),
+                    "url": item.get("url"),
+                    "commit": item.get("commit"),
+                }
+                if item.get("branch"):
+                    block["branch"] = item.get("branch")
+                blocks.append(block)
+        except Exception as e:
+            raise IOError(f"Failed to read submodules via GitPython: {e}")
+
+        return blocks
+
     def clone_submodule(self, url: str, path: str, branch: str = "main") -> None:
         """Clone a submodule."""
         try:
@@ -197,224 +221,237 @@ class GitOperations:
         """Ensure local submodule matches the provided SubmoduleDefinition.
 
         This will:
-        - Add the submodule if missing.
-        - Update .gitmodules/.git/config if URL or branch differ.
-        - Initialize/update the worktree for the submodule.
+        - Change name if differ.
+        - Change tracking branch if differ.
         - Checkout the requested commit/branch/tag/hash in the submodule.
         - Stage any changes to `.gitmodules` and the submodule gitlink in the superproject.
+        """
+        try:
+            submodule = self.repo.submodule(submodule_def.path)
+
+            reader = submodule.config_reader()
+
+            # Update name if it differs
+            current_name = None
+            try:
+                current_name = reader.get_value('name')
+            except Exception:
+                pass
+
+            if current_name != submodule_def.name:
+                self.repo.git.submodule("set-name", submodule_def.name, submodule_def.path)
+
+             # Update tracking branch if it differs
+            current_branch = None
+            try:
+                current_branch = reader.get_value('branch')
+            except Exception:
+                pass  # No branch key in .gitmodules
+
+            if current_branch != submodule_def.tracking_branch:
+                if submodule_def.tracking_branch:
+                    self.repo.git.submodule(
+                        "set-branch",
+                        "--branch",
+                        submodule_def.tracking_branch,
+                        submodule_def.path)
+                else:
+                    # Unset branch if tracking_branch is None or empty
+                    self.repo.git.submodule("set-branch", "--unset", submodule_def.path)
+
+            # Checkout the requested commit/branch/tag/hash in the submodule
+            sub_repo_path = self.repo_path / submodule_def.path
+            if not sub_repo_path.exists():
+                raise ValueError(f"Submodule path does not exist: {sub_repo_path}")
+
+            sub_repo = Repo(sub_repo_path)
+            try:
+                # Try to checkout the commit directly (if it's a SHA or tag)
+                sub_repo.git.checkout(submodule_def.commit)
+            except git.GitCommandError:
+                # If that fails, try to checkout the tracking branch (if specified)
+                if submodule_def.tracking_branch:
+                    sub_repo.git.checkout(submodule_def.tracking_branch)
+                else:
+                    raise RuntimeError(
+                        f"Failed to checkout commit {
+                            submodule_def.commit} and no tracking branch specified for {
+                            submodule_def.name}")
+
+        except ValueError as e:
+            raise ValueError(f"Submodule not found: {submodule_def.path}")
+        except git.GitCommandError as e:
+            raise RuntimeError(f"Failed to sync submodule {submodule_def.name}: {e}")
+
+    def add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
+        """Add a new submodule according to the SubmoduleDefinition.
+
+        This will add an entry to `.gitmodules`, initialize the submodule
+        worktree, checkout the requested commit/branch/tag, and stage changes.
         """
         name = submodule_def.name
         path = submodule_def.path
         url = submodule_def.url
-        desired_commit = submodule_def.commit
         desired_branch = submodule_def.tracking_branch
+        desired_commit = submodule_def.commit
 
-        # Find existing submodule entry (if any). If .gitmodules is malformed
-        # attempting to access repo.submodules may raise; treat that as no existing
-        existing = None
+        # If an entry already exists, treat as sync instead
         try:
-            for s in self.repo.submodules:
-                if s.path == path or s.name == name:
-                    existing = s
-                    break
-        except Exception:
-            existing = None
-
-        try:
-            # If submodule definition doesn't exist in .gitmodules, add it
-            if existing is None:
-                # Use provided branch if any, otherwise let git choose
-                branch_arg = desired_branch if desired_branch else "main"
-
-                sub_path_fs = self.repo_path / path
-                try:
-                    if sub_path_fs.exists():
-                        # Path exists on disk; try to add and force if necessary
-                        try:
-                            self.repo.git.submodule('add', '--force', '-b', branch_arg, url, path)
-                        except git.GitCommandError as e:
-                            # If add fails because the path exists in index, try to write
-                            # .gitmodules
-                            try:
-                                self.repo.git.config(
-                                    '--file', '.gitmodules', f"submodule.{name}.url", url)
-                                if desired_branch:
-                                    self.repo.git.config(
-                                        '--file', '.gitmodules', f"submodule.{name}.branch", desired_branch)
-                                self.repo.git.submodule('sync', '--', path)
-                                self.repo.git.submodule('update', '--init', '--recursive', path)
-                            except Exception:
-                                raise RuntimeError(f"Failed to clone submodule {path}: {e}")
-                    else:
-                        self.clone_submodule(url, path, branch_arg)
-
-                    # Stage .gitmodules if present
-                    try:
-                        self.repo.git.add('.gitmodules')
-                    except Exception:
-                        pass
-
-                    # Initialize the working copy
-                    self.repo.git.submodule('update', '--init', '--recursive', path)
-                    existing = next((s for s in self.repo.submodules if s.path == path), None)
-                except Exception as e:
-                    raise RuntimeError(f"Failed to add or init submodule {path}: {e}")
-
-            # Ensure .gitmodules has a path entry for this submodule (some git operations
-            # may create a section without path; fix it up so later config reads succeed)
+            # Use git submodule add (this will update .gitmodules)
+            branch_arg = desired_branch if desired_branch else "main"
             try:
-                cur_path = None
+                self.clone_submodule(url, path, branch_arg)
+            except RuntimeError:
+                # Fallback: write .gitmodules directly and sync
                 try:
-                    cur_path = self.repo.git.config(
-                        '--file', '.gitmodules', '--get', f"submodule.{name}.path")
-                except git.GitCommandError:
-                    cur_path = None
-
-                if not cur_path:
-                    try:
-                        self.repo.git.config(
-                            '--file', '.gitmodules', f"submodule.{name}.path", path)
-                        try:
-                            self.repo.git.add('.gitmodules')
-                        except Exception:
-                            pass
-                    except Exception:
-                        # non-fatal
-                        pass
-            except Exception:
-                pass
-
-            # If url differs, update .gitmodules and sync
-            if existing is not None and getattr(existing, 'url', None) != url:
-                # Update .gitmodules entry
-                try:
+                    self.repo.git.config('--file', '.gitmodules', f"submodule.{name}.path", path)
                     self.repo.git.config('--file', '.gitmodules', f"submodule.{name}.url", url)
-                except git.GitCommandError:
-                    # fallback to submodule set-url if available
-                    try:
-                        self.repo.git.submodule('set-url', path, url)
-                    except Exception:
-                        pass
-
-                # Sync to update .git/config
-                try:
-                    self.repo.git.submodule('sync', '--', path)
-                except Exception:
-                    pass
-
-                try:
-                    self.repo.git.add('.gitmodules')
-                except Exception:
-                    pass
-
-            # If branch differs, update .gitmodules branch config
-            if desired_branch:
-                try:
-                    self.repo.git.config(
-                        '--file',
-                        '.gitmodules',
-                        f"submodule.{name}.branch",
-                        desired_branch)
-                    self.repo.git.submodule('sync', '--', path)
+                    if desired_branch:
+                        self.repo.git.config(
+                            '--file',
+                            '.gitmodules',
+                            f"submodule.{name}.branch",
+                            desired_branch)
                     try:
                         self.repo.git.add('.gitmodules')
                     except Exception:
                         pass
-                except Exception:
-                    # non-fatal: continue
-                    pass
-
-            # Ensure worktree exists for the submodule
-            submodule_repo_path = self.repo_path / path
-            try:
-                sub_repo = Repo(submodule_repo_path)
-            except git.InvalidGitRepositoryError:
-                # Initialize/update working copy
-                try:
-                    self.repo.git.submodule('update', '--init', '--recursive', path)
+                    self.repo.git.submodule('sync', '--', path)
                 except Exception as e:
-                    raise RuntimeError(f"Failed to init submodule {path}: {e}")
-                try:
-                    sub_repo = Repo(submodule_repo_path)
-                except git.InvalidGitRepositoryError as e:
-                    raise RuntimeError(
-                        f"Submodule repository not found at {submodule_repo_path}: {e}")
+                    raise RuntimeError(f"Failed to add submodule {name}: {e}")
 
-            # Fetch remote refs to be able to resolve branches/tags
+            # Initialize and update working copy
             try:
-                if 'origin' in [r.name for r in sub_repo.remotes]:
-                    sub_repo.remotes.origin.fetch('--tags')
-                else:
-                    # attempt a generic fetch
-                    sub_repo.git.fetch('--all')
+                self.repo.git.submodule('update', '--init', '--recursive', path)
             except Exception:
-                # Non-fatal; later operations may still succeed
                 pass
 
-            # Resolve desired commit/branch/tag to a commit-ish
-            resolved = None
-            try:
-                resolved = sub_repo.git.rev_parse(desired_commit)
-            except Exception:
-                # Try fetching more aggressively then resolve
+            # Checkout desired commit/branch inside submodule
+            sub_repo_path = self.repo_path / path
+            if sub_repo_path.exists():
                 try:
-                    sub_repo.git.fetch('--all')
-                    sub_repo.git.fetch('--tags')
+                    sub_repo = Repo(sub_repo_path)
+                except git.InvalidGitRepositoryError:
+                    raise RuntimeError(f"Added submodule but repository missing at {sub_repo_path}")
+
+                # Try to resolve and checkout the desired commit/branch/tag
+                resolved = None
+                try:
                     resolved = sub_repo.git.rev_parse(desired_commit)
                 except Exception:
-                    resolved = None
+                    try:
+                        sub_repo.remotes.origin.fetch('--tags')
+                        sub_repo.git.fetch('--all')
+                        resolved = sub_repo.git.rev_parse(desired_commit)
+                    except Exception:
+                        resolved = None
 
-            if resolved is None:
-                # As a last resort try to see if remote has the ref
-                try:
-                    out = sub_repo.git.ls_remote('origin', desired_commit)
-                    if out:
-                        # ls-remote returns lines like '<sha>\trefs/...'
-                        first = out.splitlines()[0]
-                        resolved = first.split('\t', 1)[0]
-                except Exception:
-                    resolved = None
-
-            if resolved is None:
-                raise RuntimeError(
-                    f"Cannot resolve commit/branch/tag '{desired_commit}' for submodule {name}")
-
-            # Checkout resolved ref. If desired_commit looks like a branch name and
-            # origin/<branch> exists, create local branch tracking it.
-            try:
-                # If it's a full SHA, just checkout (detached)
-                if re.fullmatch(r"[0-9a-fA-F]{7,40}", desired_commit):
-                    sub_repo.git.checkout(resolved)
-                else:
-                    # Try to check out a branch tracking origin/<desired_commit> if present
-                    origin_ref = f"origin/{desired_commit}"
-                    refs = [r.name for r in sub_repo.refs]
-                    if origin_ref in refs:
-                        # create or reset local branch to track remote
+                if resolved:
+                    try:
+                        sub_repo.git.checkout(resolved)
+                    except Exception:
                         try:
-                            sub_repo.git.checkout('-B', desired_commit, origin_ref)
-                        except Exception:
                             sub_repo.git.checkout(desired_commit)
-                    else:
-                        # fallback to checking out the name (could be tag or local branch)
-                        sub_repo.git.checkout(desired_commit)
-            except git.GitCommandError as e:
-                # If checkout by name failed, attempt to checkout by resolved sha
-                try:
-                    sub_repo.git.checkout(resolved)
-                except Exception:
-                    raise RuntimeError(
-                        f"Failed to checkout '{desired_commit}' in submodule {name}: {e}")
+                        except Exception:
+                            pass
+                else:
+                    # Try checkout by branch name
+                    if desired_branch:
+                        try:
+                            sub_repo.git.checkout('-B', desired_branch, f'origin/{desired_branch}')
+                        except Exception:
+                            try:
+                                sub_repo.git.checkout(desired_branch)
+                            except Exception:
+                                pass
 
-            # Stage the submodule gitlink change in the superproject
+            # Stage .gitmodules and the gitlink
+            try:
+                self.repo.git.add('.gitmodules')
+            except Exception:
+                pass
+
             try:
                 self.repo.git.add(path)
             except Exception:
-                # fallback to index add
                 try:
                     self.repo.index.add([path])
                 except Exception:
                     pass
 
         except Exception as e:
-            raise RuntimeError(f"Failed to sync submodule {name}: {e}")
+            raise RuntimeError(f"Failed to add submodule {name}: {e}")
+
+    def remove_submodule(self, block: Dict[str, Any]) -> None:
+        """Remove a submodule described by a parsed .gitmodules block.
+
+        This will deinitialize the submodule, remove the .gitmodules section,
+        remove the gitlink from the index and delete the worktree directory.
+        Changes are staged where applicable.
+        """
+        name = block.get('name')
+        path = block.get('path')
+
+        if not path:
+            raise ValueError("Invalid submodule block: missing path")
+
+        try:
+            # Deinit the submodule (remove worktree/links)
+            try:
+                self.repo.git.submodule('deinit', '-f', '--', path)
+            except Exception:
+                pass
+
+            # Remove section from .gitmodules if present
+            gm_path = self.repo_path / '.gitmodules'
+            if gm_path.exists():
+                try:
+                    if name:
+                        # Try using git config to remove the section
+                        try:
+                            self.repo.git.config(
+                                '--file', '.gitmodules', '--remove-section', f"submodule.{name}")
+                        except git.GitCommandError:
+                            # Fallback to manual removal
+                            content = gm_path.read_text()
+                            pattern = re.compile(
+                                r'\[submodule\s+"' + re.escape(name) + r'"\][^\[]*', re.M)
+                            new = pattern.sub('', content)
+                            gm_path.write_text(new)
+                    else:
+                        # No name provided: remove by matching path entry
+                        content = gm_path.read_text()
+                        # Find any section that contains 'path = <path>'
+                        pattern = re.compile(
+                            r'\[submodule\s+"([^"]+)"\]([^\[]*path\s*=\s*' + re.escape(path) + r'[^\[]*)', re.M)
+                        new = pattern.sub('', content)
+                        gm_path.write_text(new)
+
+                    try:
+                        self.repo.git.add('.gitmodules')
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+            # Remove gitlink from index (stage deletion)
+            try:
+                self.repo.git.rm('-f', '--cached', '-r', path)
+            except Exception:
+                try:
+                    self.repo.index.remove([path], r=True)
+                except Exception:
+                    pass
+
+            # Remove the submodule worktree directory from filesystem
+            sub_path = self.repo_path / path
+            try:
+                if sub_path.exists():
+                    # Use shutil to remove tree safely
+                    import shutil
+                    shutil.rmtree(sub_path)
+            except Exception:
+                pass
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to remove submodule {path}: {e}")
