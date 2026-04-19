@@ -45,19 +45,6 @@ class Manifest:
         root_paths = set()
         self._collect(self.submodules, root_paths)
 
-    def get_submodule(self, name: str) -> Optional[SubmoduleDefinition]:
-        """Retrieve submodule by name."""
-        def _find(subs):
-            for s in subs:
-                if s.name == name:
-                    return s
-                res = _find(s.submodules)
-                if res:
-                    return res
-            return None
-
-        return _find(self.submodules)
-
     def to_dict(self) -> dict:
         """Convert to dictionary representation."""
         return {

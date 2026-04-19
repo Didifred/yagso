@@ -3,14 +3,23 @@
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import re
-import git
-from git import Repo, Submodule
+from git import Repo, Submodule, Git
 
 from ..domain.submodule import SubmoduleDefinition
 
 
 class GitOperations:
     """Interface to Git commands using gitpython."""
+
+    def is_same_repo(url1: str, url2: str) -> bool:
+        """Check if two repo URLs point to same repository by comparing HEAD."""
+        g = Git()
+        try:
+            head1 = g.ls_remote(url1, 'HEAD').split()[0]
+            head2 = g.ls_remote(url2, 'HEAD').split()[0]
+            return head1 == head2
+        except BaseException:
+            return False
 
     def __init__(self, repo_path: Path):
         """Initialize with repository path."""
@@ -241,7 +250,35 @@ class GitOperations:
             if current_name != submodule_def.name:
                 self.repo.git.submodule("set-name", submodule_def.name, submodule_def.path)
 
-             # Update tracking branch if it differs
+            # Update URL if it differs (handle https <-> ssh changes)
+            current_url = None
+            try:
+                current_url = reader.get_value('url')
+            except Exception:
+                pass
+
+            if current_url != submodule_def.url:
+                try:
+                    self.repo.git.config(
+                        '--file',
+                        '.gitmodules',
+                        f"submodule.{
+                            submodule_def.name}.url",
+                        submodule_def.url)
+                except git.GitCommandError:
+                    pass
+
+                try:
+                    self.repo.git.add('.gitmodules')
+                except Exception:
+                    pass
+
+                try:
+                    self.repo.git.submodule('sync', '--', submodule_def.path)
+                except Exception:
+                    pass
+
+            # Update tracking branch if it differs
             current_branch = None
             try:
                 current_branch = reader.get_value('branch')

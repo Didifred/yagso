@@ -87,7 +87,6 @@ YAGSO (Yet Another Git Submodule Orchestrator) is a CLI tool for managing Git su
   - `version`: Manifest version
 - **Methods**:
   - `validate()`: Ensure manifest integrity
-  - `get_submodule(name)`: Retrieve submodule by name
 
 #### `SubmoduleDefinition`
 - **Responsibility**: Represent a single submodule configuration

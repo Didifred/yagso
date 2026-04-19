@@ -2,6 +2,8 @@
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from enum import Enum
+import re
+from urllib.parse import urlparse
 
 from ..domain.manifest import Manifest
 from ..domain.submodule import SubmoduleDefinition
@@ -105,34 +107,51 @@ class SubmoduleOrchestrator:
             status = self._search_submodule(submodule, blocks)
 
             if status == DiffStatus.MODIFIED:
-                git_ops.sync_submodule(submodule)
+                # git_ops.sync_submodule(submodule)
+                pass
             elif status == DiffStatus.ADDED:
-                git_ops.add_submodule(submodule)
+                # git_ops.add_submodule(submodule)
+                pass
 
             if submodule.submodules:
                 childs.append(submodule)
 
         # Remaining blocks that were not matched are removed submodules
         for block in blocks:
-            git_ops.remove_submodule(block)
+            pass
+            # git_ops.remove_submodule(block)
 
         for submodule in childs:
             new_root = root_path / Path(submodule.root_path)
             self._sync_child_submodules(new_root, submodule.submodules)
 
     def _search_submodule(self, submodule: SubmoduleDefinition, blocks: list) -> DiffStatus:
-        """Search for a submodule by path/url in the manifest."""
+        """Search for a submodule by path/url in the manifest and determine its status compared to the current repository state.
+
+        Args:
+            submodule (SubmoduleDefinition):    Submodule definition from the manifest to search for.
+            blocks (list): current submodule definitions from .gitmodules
+
+        Returns:
+            DiffStatus: indicating if the submodule is unchanged, modified, added
+        """
+
         for block in blocks:
-            if ((block.get("path") == submodule.path) and (block.get("url") == submodule.url)):
-                # Compare commit hashes to determine if modified
-                if (block.get("commit") == submodule.commit) \
-                        and (block.get("branch") == submodule.tracking_branch) \
-                        and (block.get("name") == submodule.name):
-                    blocks.remove(block)
-                    return DiffStatus.UNCHANGED
+            if block.get("path") == submodule.path:
+                if block.get("url") == submodule.url:
+                    if (block.get("commit") == submodule.commit) \
+                            and (block.get("branch") == submodule.tracking_branch) \
+                            and (block.get("name") == submodule.name):
+                        blocks.remove(block)
+                        return DiffStatus.UNCHANGED
+                    else:
+                        blocks.remove(block)
+                        return DiffStatus.MODIFIED
                 else:
-                    blocks.remove(block)
-                    return DiffStatus.MODIFIED
+                    # URL change but same repo (eg ssh <-> https)
+                    if GitOperations.is_same_repo(block.get("url", ""), submodule.url):
+                        blocks.remove(block)
+                        return DiffStatus.MODIFIED
 
         # If not found, it's an added submodule
         return DiffStatus.ADDED
