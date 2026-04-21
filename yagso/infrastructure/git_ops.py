@@ -1,10 +1,9 @@
 """Infrastructure layer for Git operations using gitpython."""
-
+import re
+import git
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-import re
 from git import Repo, Submodule, Git
-
 from ..domain.submodule import SubmoduleDefinition
 
 
@@ -12,7 +11,21 @@ class GitOperations:
     """Interface to Git commands using gitpython."""
 
     def is_same_repo(url1: str, url2: str) -> bool:
-        """Check if two repo URLs point to same repository by comparing HEAD."""
+        """Check whether two repository URLs reference the same remote.
+
+        This performs a lightweight check by asking each remote for the
+        `HEAD` reference (using `git ls-remote HEAD`) and comparing the
+        returned object names. This is useful to detect equivalent
+        repositories where the URL form differs (for example HTTPS vs SSH).
+
+        Args:
+            url1: First repository URL.
+            url2: Second repository URL.
+
+        Returns:
+            True if both URLs resolve to the same HEAD object name, False
+            on mismatch or when the remote check fails.
+        """
         g = Git()
         try:
             head1 = g.ls_remote(url1, 'HEAD').split()[0]
@@ -21,6 +34,31 @@ class GitOperations:
         except BaseException:
             return False
 
+    # Helper to compare short/long SHA forms
+    def _sha_equal(self, a: Optional[str], b: Optional[str]) -> bool:
+        """Return True when two commit-ish strings refer to the same commit.
+
+        Accepts full or abbreviated commit SHAs (or tags/refs that have been
+        resolved to SHAs). Returns ``False`` if either value is ``None`` or
+        empty. The comparison treats one value being a prefix of the other as
+        equality to support short vs long SHA forms.
+
+        Args:
+            a: first commit-ish string or ``None``.
+            b: second commit-ish string or ``None``.
+
+        Returns:
+            ``True`` when the two strings are equal or one is a prefix of the other,
+            otherwise ``False``.
+        """
+
+        if not a or not b:
+            return False
+
+        a = a.strip()
+        b = b.strip()
+        return a == b or a.startswith(b) or b.startswith(a)
+
     def __init__(self, repo_path: Path):
         """Initialize with repository path."""
         self.repo_path = repo_path
@@ -28,18 +66,35 @@ class GitOperations:
 
     @property
     def repo(self) -> Repo:
-        """Get or create GitPython Repo object."""
+        """Lazily construct and return a GitPython ``Repo`` for `self.repo_path`.
+
+        Returns:
+            A ``git.Repo`` instance rooted at `self.repo_path`.
+
+        Raises:
+            ValueError: if `self.repo_path` is not a valid Git repository.
+        """
+
         if self._repo is None:
             try:
                 self._repo = Repo(self.repo_path)
             except git.InvalidGitRepositoryError:
                 raise ValueError(f"Not a valid Git repository: {self.repo_path}")
+
         return self._repo
 
     def get_recorded_commit(self, path: str) -> Optional[str]:
-        """Return the commit SHA recorded in HEAD for the gitlink at `path`.
+        """Return the gitlink commit SHA for `path` recorded in `HEAD`.
 
-        Uses git ls-tree to read the tree entry for the path and extracts the commit hash.
+        This reads the index/tree for `HEAD` and extracts the commit-like
+        object id for the gitlink entry. If the path is not present or the
+        Git command fails this returns ``None``.
+
+        Args:
+            path: relative path to the submodule/gitlink inside the repo.
+
+        Returns:
+            Commit SHA string (7-40 hex chars) if present, otherwise ``None``.
         """
         try:
             out = self.repo.git.ls_tree('HEAD', '--', path)
@@ -57,11 +112,19 @@ class GitOperations:
         return None
 
     def get_refs_containing_commit_at_path(self, worktree_path: Path, commit: str) -> List[str]:
-        """Return a list of refs (local branches, tags, and remote branches/tags)
-        in the worktree at `worktree_path` that contain `commit`.
+        """Return refs in a worktree that point at the given `commit`.
 
-        Excludes symbolic `HEAD` refs (e.g. `HEAD` or `origin/HEAD`). If the
-        worktree is not a git repository or the command fails, returns an empty list.
+        This inspects the repository at `worktree_path` and lists refs that
+        directly point at the supplied `commit` (branches, tags and remotes).
+        Symbolic HEAD refs are filtered out.
+
+        Args:
+            worktree_path: filesystem path to the repository to inspect.
+            commit: commit-ish (SHA or ref) to check for.
+
+        Returns:
+            List of ref names (short form). Returns an empty list if the path
+            is not a repository or the git command fails.
         """
         try:
             sub_repo = Repo(worktree_path)
@@ -84,11 +147,20 @@ class GitOperations:
         return filtered
 
     def get_submodules(self) -> List[Dict[str, Any]]:
-        """List all submodules in the repository."""
+        """Return a list of dictionaries describing configured submodules.
+
+        Each returned dict contains the keys: ``name``, ``path``, ``url``,
+        ``branch`` (may be ``None``), and ``commit`` (may be ``None`` when
+        unavailable). This reads submodule metadata via GitPython which in
+        turn reads `.gitmodules`.
+
+        Returns:
+            A list of simple dicts representing submodules.
+        """
         submodules = []
         for submodule in self.repo.submodules:
             try:
-                # This reads from .gitmodules without defaults
+                # This reads from .gitmodules
                 reader = submodule.config_reader()
                 tracking_branch = reader.get_value('branch')
             except Exception:
@@ -105,11 +177,18 @@ class GitOperations:
         return submodules
 
     def read_gitmodules_blocks(self) -> list:
-        """Return parsed submodule blocks using GitPython.
+        """Read configured submodules and return simple block dictionaries.
 
-        Uses `self.get_submodules()` to obtain submodule entries and
-        converts them to the same simple block dict format previously
-        produced by parsing the .gitmodules file.
+        This is a convenience wrapper around `get_submodules()` that converts
+        the GitPython representation into the lightweight block format used
+        elsewhere in the codebase: keys include ``name``, ``path``, ``url``
+        and ``commit`` and optionally ``branch``.
+
+        Returns:
+            List of dicts representing `.gitmodules` entries.
+
+        Raises:
+            IOError: when reading via GitPython fails.
         """
         blocks = []
         try:
@@ -128,98 +207,14 @@ class GitOperations:
 
         return blocks
 
-    def clone_submodule(self, url: str, path: str, branch: str = "main") -> None:
-        """Clone a submodule."""
-        try:
-            # Use git command to add submodule
-            self.repo.git.submodule("add", "-b", branch, url, path)
-        except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to clone submodule {path}: {e}")
-
-    def update_submodule(self, path: str, options: Dict[str, Any]) -> None:
-        """Update a specific submodule."""
-        try:
-            if options.get("init", False):
-                # Initialize and update submodule
-                self.repo.git.submodule("update", "--init", "--recursive", path)
-            else:
-                # Just update existing submodules
-                self.repo.git.submodule("update", "--recursive", path)
-
-            if options.get("remote", False):
-                # Update to latest on remote branch
-                submodule_repo_path = self.repo_path / path
-                if submodule_repo_path.exists():
-                    submodule_repo = Repo(submodule_repo_path)
-                    submodule_repo.remotes.origin.pull()
-
-        except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to update submodule {path}: {e}")
-        except ValueError:
-            raise ValueError(f"Submodule not found: {path}")
-
-    def update_all_submodules(self, options: Dict[str, Any]) -> None:
-        """Update all submodules."""
-        for submodule in self.repo.submodules:
-            self.update_submodule(submodule.path, options)
-
-    def commit_all(self, message: str) -> None:
-        """Commit all changes recursively."""
-        try:
-            # Add all changes in main repo
-            self.repo.git.add(all=True)
-
-            # Commit if there are changes
-            if self.repo.is_dirty() or self.repo.untracked_files:
-                self.repo.index.commit(message)
-            else:
-                raise ValueError("No changes to commit")
-
-            # Also commit in submodules if they have changes
-            for submodule in self.repo.submodules:
-                if submodule.module_exists():
-                    submodule_repo = submodule.module()
-                    if submodule_repo.is_dirty() or submodule_repo.untracked_files:
-                        submodule_repo.git.add(all=True)
-                        submodule_repo.index.commit(f"Update {submodule.name}: {message}")
-
-        except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to commit changes: {e}")
-
-    def push_all(self) -> None:
-        """Push all commits to remote."""
-        try:
-            # Push main repository
-            origin = self.repo.remote('origin')
-            origin.push()
-
-            # Push all submodules
-            for submodule in self.repo.submodules:
-                if submodule.module_exists():
-                    submodule_repo = submodule.module()
-                    try:
-                        submodule_origin = submodule_repo.remote('origin')
-                        submodule_origin.push()
-                    except (git.GitCommandError, ValueError):
-                        # Skip if submodule has no remote or push fails
-                        pass
-
-        except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to push changes: {e}")
-        except ValueError as e:
-            raise RuntimeError(f"No remote origin configured: {e}")
-
-    def get_status(self) -> Dict[str, Any]:
-        """Get repository status."""
-        return {
-            "is_dirty": self.repo.is_dirty(),
-            "untracked_files": self.repo.untracked_files,
-            "modified_files": [item.a_path for item in self.repo.index.diff(None)],
-            "staged_files": [item.a_path for item in self.repo.index.diff("HEAD")],
-        }
-
     def is_git_repository(self) -> bool:
-        """Check if the path is a valid Git repository."""
+        """Return True when `self.repo_path` is a Git repository.
+
+        Returns:
+            True if `self.repo_path` can be opened by GitPython, False
+            otherwise.
+        """
+
         try:
             Repo(self.repo_path)
             return True
@@ -227,63 +222,47 @@ class GitOperations:
             return False
 
     def sync_submodule(self, submodule_def: SubmoduleDefinition) -> None:
-        """Ensure local submodule matches the provided SubmoduleDefinition.
+        """Synchronize a single submodule to the given definition.
 
-        This will:
-        - Change name if differ.
-        - Change tracking branch if differ.
-        - Checkout the requested commit/branch/tag/hash in the submodule.
-        - Stage any changes to `.gitmodules` and the submodule gitlink in the superproject.
+        This inspects the repository's `.gitmodules` (via GitPython's
+        `config_reader`) and the on-disk submodule, then performs any of the
+        following as needed to make the local submodule match
+        `submodule_def`:
+        - update submodule name (via `git submodule set-name`)
+        - update the URL in `.gitmodules` and run `git submodule sync`
+        - update the tracking branch (via `git submodule set-branch` or
+          unset it)
+        - checkout the requested commit/branch/tag/hash inside the submodule
+
+        Args:
+            submodule_def: SubmoduleDefinition describing desired state.
+
+        Raises:
+            ValueError: if the submodule path does not exist in the filesystem.
+            RuntimeError: if a git operation fails while applying changes.
         """
+
         try:
             submodule = self.repo.submodule(submodule_def.path)
-
             reader = submodule.config_reader()
 
             # Update name if it differs
-            current_name = None
-            try:
-                current_name = reader.get_value('name')
-            except Exception:
-                pass
-
+            current_name = submodule.name
             if current_name != submodule_def.name:
                 self.repo.git.submodule("set-name", submodule_def.name, submodule_def.path)
 
             # Update URL if it differs (handle https <-> ssh changes)
-            current_url = None
-            try:
-                current_url = reader.get_value('url')
-            except Exception:
-                pass
-
+            current_url = submodule.url
             if current_url != submodule_def.url:
-                try:
-                    self.repo.git.config(
-                        '--file',
-                        '.gitmodules',
-                        f"submodule.{
-                            submodule_def.name}.url",
-                        submodule_def.url)
-                except git.GitCommandError:
-                    pass
-
-                try:
-                    self.repo.git.add('.gitmodules')
-                except Exception:
-                    pass
-
-                try:
-                    self.repo.git.submodule('sync', '--', submodule_def.path)
-                except Exception:
-                    pass
+                self.repo.git.config('--file', '.gitmodules',
+                                     f"submodule.{submodule_def.name}.url", submodule_def.url)
+                self.repo.git.submodule('sync', '--', submodule_def.path)
 
             # Update tracking branch if it differs
-            current_branch = None
             try:
                 current_branch = reader.get_value('branch')
             except Exception:
-                pass  # No branch key in .gitmodules
+                current_branch = None
 
             if current_branch != submodule_def.tracking_branch:
                 if submodule_def.tracking_branch:
@@ -296,30 +275,43 @@ class GitOperations:
                     # Unset branch if tracking_branch is None or empty
                     self.repo.git.submodule("set-branch", "--unset", submodule_def.path)
 
-            # Checkout the requested commit/branch/tag/hash in the submodule
+            # Checkout the requested commit expressed by a branch/tag/hash in the submodule
+            # Resolve commit-ish (branch/tag/hash) to a local SHA when possible and
+            # compare it to the recorded gitlink before performing the checkout.
             sub_repo_path = self.repo_path / submodule_def.path
             if not sub_repo_path.exists():
                 raise ValueError(f"Submodule path does not exist: {sub_repo_path}")
 
-            sub_repo = Repo(sub_repo_path)
-            try:
-                # Try to checkout the commit directly (if it's a SHA or tag)
-                sub_repo.git.checkout(submodule_def.commit)
-            except git.GitCommandError:
-                # If that fails, try to checkout the tracking branch (if specified)
-                if submodule_def.tracking_branch:
-                    sub_repo.git.checkout(submodule_def.tracking_branch)
-                else:
+            current_commit = self.get_recorded_commit(submodule_def.path)
+            desired_commit = submodule_def.commit
+
+            # Only attempt resolution/checkout when a desired ref is provided
+            if desired_commit:
+                sub_repo = Repo(sub_repo_path)
+
+                try:
+                    resolved_sha = sub_repo.git.rev_parse(desired_commit)
+                    resolved_sha = resolved_sha.strip()
+                except Exception as e:
+                    resolved_sha = None
                     raise RuntimeError(
-                        f"Failed to checkout commit {
-                            submodule_def.commit} and no tracking branch specified for {
-                            submodule_def.name}")
+                        f"Failed to resolve sha of {desired_commit} in submodule {
+                            submodule_def.name}: {e}")
+
+                if not self._sha_equal(current_commit, resolved_sha):
+                    try:
+                        sub_repo.git.checkout(desired_commit)
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Failed to checkout {desired_commit} in submodule {
+                                submodule_def.name}: {e}")
 
         except ValueError as e:
             raise ValueError(f"Submodule not found: {submodule_def.path}")
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to sync submodule {submodule_def.name}: {e}")
 
+    # NOT YET TESTED METHODS BELOW (TODO: add tests for these)
     def add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
         """Add a new submodule according to the SubmoduleDefinition.
 
@@ -492,3 +484,93 @@ class GitOperations:
 
         except Exception as e:
             raise RuntimeError(f"Failed to remove submodule {path}: {e}")
+
+    def clone_submodule(self, url: str, path: str, branch: str = "main") -> None:
+        """Clone a submodule."""
+        try:
+            # Use git command to add submodule
+            self.repo.git.submodule("add", "-b", branch, url, path)
+        except git.GitCommandError as e:
+            raise RuntimeError(f"Failed to clone submodule {path}: {e}")
+
+    def update_submodule(self, path: str, options: Dict[str, Any]) -> None:
+        """Update a specific submodule."""
+        try:
+            if options.get("init", False):
+                # Initialize and update submodule
+                self.repo.git.submodule("update", "--init", "--recursive", path)
+            else:
+                # Just update existing submodules
+                self.repo.git.submodule("update", "--recursive", path)
+
+            if options.get("remote", False):
+                # Update to latest on remote branch
+                submodule_repo_path = self.repo_path / path
+                if submodule_repo_path.exists():
+                    submodule_repo = Repo(submodule_repo_path)
+                    submodule_repo.remotes.origin.pull()
+
+        except git.GitCommandError as e:
+            raise RuntimeError(f"Failed to update submodule {path}: {e}")
+        except ValueError:
+            raise ValueError(f"Submodule not found: {path}")
+
+    def update_all_submodules(self, options: Dict[str, Any]) -> None:
+        """Update all submodules."""
+        for submodule in self.repo.submodules:
+            self.update_submodule(submodule.path, options)
+
+    def commit_all(self, message: str) -> None:
+        """Commit all changes recursively."""
+        try:
+            # Add all changes in main repo
+            self.repo.git.add(all=True)
+
+            # Commit if there are changes
+            if self.repo.is_dirty() or self.repo.untracked_files:
+                self.repo.index.commit(message)
+            else:
+                raise ValueError("No changes to commit")
+
+            # Also commit in submodules if they have changes
+            for submodule in self.repo.submodules:
+                if submodule.module_exists():
+                    submodule_repo = submodule.module()
+                    if submodule_repo.is_dirty() or submodule_repo.untracked_files:
+                        submodule_repo.git.add(all=True)
+                        submodule_repo.index.commit(f"Update {submodule.name}: {message}")
+
+        except git.GitCommandError as e:
+            raise RuntimeError(f"Failed to commit changes: {e}")
+
+    def push_all(self) -> None:
+        """Push all commits to remote."""
+        try:
+            # Push main repository
+            origin = self.repo.remote('origin')
+            origin.push()
+
+            # Push all submodules
+            for submodule in self.repo.submodules:
+                if submodule.module_exists():
+                    submodule_repo = submodule.module()
+                    try:
+                        submodule_origin = submodule_repo.remote('origin')
+                        submodule_origin.push()
+                    except (git.GitCommandError, ValueError):
+                        # Skip if submodule has no remote or push fails
+                        pass
+
+        except git.GitCommandError as e:
+            raise RuntimeError(f"Failed to push changes: {e}")
+        except ValueError as e:
+            raise RuntimeError(f"No remote origin configured: {e}")
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get repository status."""
+        return {
+            "is_dirty": self.repo.is_dirty(),
+            "untracked_files": self.repo.untracked_files,
+            "modified_files": [item.a_path for item in self.repo.index.diff(None)],
+            "staged_files": [item.a_path for item in self.repo.index.diff("HEAD")],
+        }

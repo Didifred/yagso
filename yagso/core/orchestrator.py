@@ -107,7 +107,7 @@ class SubmoduleOrchestrator:
             status = self._search_submodule(submodule, blocks)
 
             if status == DiffStatus.MODIFIED:
-                # git_ops.sync_submodule(submodule)
+                git_ops.sync_submodule(submodule)
                 pass
             elif status == DiffStatus.ADDED:
                 # git_ops.add_submodule(submodule)
@@ -126,10 +126,11 @@ class SubmoduleOrchestrator:
             self._sync_child_submodules(new_root, submodule.submodules)
 
     def _search_submodule(self, submodule: SubmoduleDefinition, blocks: list) -> DiffStatus:
-        """Search for a submodule by path/url in the manifest and determine its status compared to the current repository state.
+        """Search for a submodule by path/url in the manifest and determine its
+        status compared to the current repository state.
 
         Args:
-            submodule (SubmoduleDefinition):    Submodule definition from the manifest to search for.
+            submodule (SubmoduleDefinition): Submodule definition from the manifest to search for.
             blocks (list): current submodule definitions from .gitmodules
 
         Returns:
@@ -153,7 +154,7 @@ class SubmoduleOrchestrator:
                         blocks.remove(block)
                         return DiffStatus.MODIFIED
 
-        # If not found, it's an added submodule
+        # Otherwise, it's an added submodule
         return DiffStatus.ADDED
 
     def commit_changes(self, message: str) -> None:
