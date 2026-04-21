@@ -15,6 +15,53 @@ class ManifestManager:
     def __init__(self):
         pass
 
+    def update_submodule_field(self, manifest: Manifest, root_path: str, field_name: str,
+                               field_value) -> None:
+        """Update a specific field of a submodule identified by root_path.
+
+        Args:
+            manifest (Manifest): The manifest to update
+            root_path (str): The root_path of the submodule to update
+            field_name (str): The field name to update (e.g., 'commit', 'url', 'tracking_branch')
+            field_value: The new value for the field
+
+        Raises:
+            ValueError: Submodule not found with the specified root_path
+            ValueError: Invalid field name for SubmoduleDefinition
+
+
+        """
+        submodule = self._find_submodule_by_root_path(manifest.submodules, root_path)
+
+        if not submodule:
+            raise ValueError(f"Submodule not found with root_path: {root_path}")
+
+        if not hasattr(submodule, field_name):
+            raise ValueError(
+                f"Invalid field name '{field_name}' for SubmoduleDefinition")
+
+        setattr(submodule, field_name, field_value)
+
+    def _find_submodule_by_root_path(self, submodules: List[SubmoduleDefinition],
+                                     root_path: str) -> Optional[SubmoduleDefinition]:
+        """Recursively find a submodule by its root_path.
+
+        Args:
+            submodules (List[SubmoduleDefinition]): List of submodules to search
+            root_path (str): The root_path to search for
+
+        Returns:
+            Optional[SubmoduleDefinition]: The found submodule or None
+        """
+        for submodule in submodules:
+            if submodule.root_path == root_path:
+                return submodule
+            if submodule.submodules:
+                found = self._find_submodule_by_root_path(submodule.submodules, root_path)
+                if found:
+                    return found
+        return None
+
     def load_manifest(self, path: Path) -> Manifest:
         """Load yagso.yaml manifest from file.
 
@@ -117,7 +164,29 @@ class ManifestManager:
             repo_fs_path: Path,
             prefix_path: Path,
             git_ops: GitOperations) -> SubmoduleDefinition:
-        """Construct a SubmoduleDefinition from a parsed .gitmodules block using git_ops for git info."""
+        """Construct a SubmoduleDefinition from a parsed .gitmodules block using git_ops for git info.
+
+        This method builds a complete SubmoduleDefinition by combining information from
+        the .gitmodules block with git repository state information. It also recursively
+        discovers nested submodules if they exist.
+
+        Args:
+            block (dict): A parsed .gitmodules block containing submodule configuration
+                         (name, path, url, and optional branch).
+            repo_fs_path (Path): Filesystem path to the repository containing the .gitmodules file.
+            prefix_path (Path): The relative path prefix for nested submodules to compute
+                               the full root_path.
+            git_ops (GitOperations): GitOperations instance to retrieve commit SHA and refs
+                                     for the submodule.
+
+        Raises:
+            ValueError: If the block is missing required fields (name, path, or url).
+            ValueError: If unable to determine the recorded commit SHA for the submodule.
+
+        Returns:
+            SubmoduleDefinition: A fully constructed SubmoduleDefinition object with commit,
+                                refs, and any nested submodules discovered.
+        """
         name = block.get("name", block.get("path", ""))
         path = block.get("path", name)
         url = block.get("url", "")
