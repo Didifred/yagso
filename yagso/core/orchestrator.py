@@ -33,6 +33,8 @@ class SubmoduleOrchestrator:
         if root_path is None:
             root_path = self.repo_path
 
+        # TODO : read existing manifest, in order to preserve fields that are not
+        # generated (eg commit)
         manifest = self.manifest_manager.generate_from_repository(root_path)
         manifest_path = root_path / "yagso.yaml"
         self.manifest_manager.save_manifest(manifest, manifest_path)

@@ -307,7 +307,7 @@ class GitOperations:
                                 submodule_def.name}: {e}")
 
         except ValueError as e:
-            raise ValueError(f"Submodule not found: {submodule_def.path}")
+            raise ValueError(f"Submodule not found: {submodule_def.path} : {e}")
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to sync submodule {submodule_def.name}: {e}")
 

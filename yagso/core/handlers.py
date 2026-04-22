@@ -3,49 +3,30 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 from pathlib import Path
-from ..orchestrator import SubmoduleOrchestrator
-from ...cli.formatter import OutputFormatter
+from .orchestrator import SubmoduleOrchestrator
+from ..cli.formatter import OutputFormatter
 
 
 class CommandHandler(ABC):
     """Base class for command handlers."""
 
-    def __init__(self, orchestrator: "SubmoduleOrchestrator"):
+    def __init__(self, orchestrator: SubmoduleOrchestrator):
         self.orchestrator = orchestrator
 
     @abstractmethod
     def execute(self, options: Dict[str, Any]) -> None:
         """Execute the command with given options."""
-        pass
-
-
-"""Command handlers for YAGSO CLI."""
-
-
-class CommandHandler(ABC):
-    """Base class for command handlers."""
-
-    def __init__(self, orchestrator: "SubmoduleOrchestrator"):
-        self.orchestrator = orchestrator
-
-    @abstractmethod
-    def execute(self, options: Dict[str, Any]) -> None:
-        """Execute the command with given options."""
-        pass
+        raise NotImplementedError()
 
 
 class GenerateHandler(CommandHandler):
     """Handler for 'generate' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        """Generate manifest from repository."""
         formatter = OutputFormatter()
 
         root_path = options.get("root_path")
-        if root_path:
-            root_path = Path(root_path)
-        else:
-            root_path = Path.cwd()
+        root_path = Path(root_path) if root_path else Path.cwd()
 
         if not (root_path / ".git").exists():
             raise ValueError(f"Not a Git repository: {root_path}")
@@ -58,7 +39,6 @@ class UpdateHandler(CommandHandler):
     """Handler for 'update' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        """Update submodules."""
         formatter = OutputFormatter()
 
         self.orchestrator.update_submodules(options)
@@ -71,14 +51,10 @@ class ConfigureHandler(CommandHandler):
     """Handler for 'configure' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        """Apply manifest configuration."""
         formatter = OutputFormatter()
 
         root_path = options.get("root_path")
-        if root_path:
-            root_path = Path(root_path)
-        else:
-            root_path = Path.cwd()
+        root_path = Path(root_path) if root_path else Path.cwd()
 
         if not (root_path / ".git").exists():
             raise ValueError(f"Not a Git repository: {root_path}")
@@ -91,7 +67,6 @@ class CommitHandler(CommandHandler):
     """Handler for 'commit' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        """Commit changes."""
         formatter = OutputFormatter()
 
         message = options.get("message", "")
@@ -106,8 +81,17 @@ class PushHandler(CommandHandler):
     """Handler for 'push' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        """Push changes."""
         formatter = OutputFormatter()
 
         self.orchestrator.push_changes()
         formatter.success("Pushed all changes to remote")
+
+
+__all__ = [
+    "CommandHandler",
+    "GenerateHandler",
+    "UpdateHandler",
+    "ConfigureHandler",
+    "CommitHandler",
+    "PushHandler",
+]
