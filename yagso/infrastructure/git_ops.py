@@ -2,9 +2,35 @@
 import re
 import git
 from pathlib import Path
+from collections import OrderedDict
 from typing import Dict, List, Any, Optional
 from git import Repo, Submodule, Git
+from git.config import GitConfigParser
 from ..domain.submodule import SubmoduleDefinition
+
+
+# Workaround: During Python interpreter shutdown on Windows, GitPython's
+# AutoInterrupt destructor can invoke logging internals that may already be
+# torn down, causing ``Exception ignored in: ...`` messages.  To avoid that
+# noisy traceback we monkeypatch a safe __del__ wrapper that swallows any
+# exception raised during finalization. This is a runtime-only workaround
+# that keeps third-party site-packages untouched on disk.
+try:
+    import git.cmd as _git_cmd
+
+    def _safe_autointerrupt_del(self):
+        try:
+            # Attempt to terminate the process as before, but swallow all
+            # exceptions to avoid interpreter-shutdown races raising here.
+            self._terminate()
+        except Exception:
+            pass
+
+    if hasattr(_git_cmd, "_AutoInterrupt"):
+        _git_cmd._AutoInterrupt.__del__ = _safe_autointerrupt_del
+except Exception:
+    # If anything goes wrong importing or monkeypatching, don't fail import.
+    pass
 
 
 class GitOperations:
@@ -35,7 +61,7 @@ class GitOperations:
             return False
 
     # Helper to compare short/long SHA forms
-    def _sha_equal(self, a: Optional[str], b: Optional[str]) -> bool:
+    def sha_equal(a: Optional[str], b: Optional[str]) -> bool:
         """Return True when two commit-ish strings refer to the same commit.
 
         Accepts full or abbreviated commit SHAs (or tags/refs that have been
@@ -82,6 +108,29 @@ class GitOperations:
                 raise ValueError(f"Not a valid Git repository: {self.repo_path}")
 
         return self._repo
+
+    def close(self) -> None:
+        """Release internal Repo reference to allow deterministic cleanup.
+
+        Setting ``self._repo`` to ``None`` removes the reference to the
+        GitPython ``Repo`` instance so it can be garbage-collected before
+        interpreter shutdown (helps avoid shutdown-time destructor races
+        on Windows).
+        """
+        try:
+            self._repo = None
+        except Exception:
+            pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            self._repo = None
+        except Exception:
+            pass
+        return False
 
     def get_recorded_commit(self, path: str) -> Optional[str]:
         """Return the gitlink commit SHA for `path` recorded in `HEAD`.
@@ -221,14 +270,14 @@ class GitOperations:
         except git.InvalidGitRepositoryError:
             return False
 
-    def sync_submodule(self, submodule_def: SubmoduleDefinition) -> None:
+    def sync_submodule(self, submodule_def: SubmoduleDefinition, name: str) -> None:
         """Synchronize a single submodule to the given definition.
 
         This inspects the repository's `.gitmodules` (via GitPython's
         `config_reader`) and the on-disk submodule, then performs any of the
         following as needed to make the local submodule match
         `submodule_def`:
-        - update submodule name (via `git submodule set-name`)
+        - update submodule name (by removing and re-adding the submodule with the new name)
         - update the URL in `.gitmodules` and run `git submodule sync`
         - update the tracking branch (via `git submodule set-branch` or
           unset it)
@@ -236,6 +285,7 @@ class GitOperations:
 
         Args:
             submodule_def: SubmoduleDefinition describing desired state.
+            name: the name of the submodule to sync (used for git commands).
 
         Raises:
             ValueError: if the submodule path does not exist in the filesystem.
@@ -243,26 +293,50 @@ class GitOperations:
         """
 
         try:
-            submodule = self.repo.submodule(submodule_def.path)
-            reader = submodule.config_reader()
+            submodule = self.repo.submodule(name)
 
             # Update name if it differs
             current_name = submodule.name
             if current_name != submodule_def.name:
-                self.repo.git.submodule("set-name", submodule_def.name, submodule_def.path)
+                # Save submodule properties
+                url = submodule.url
+                path = submodule.path
+                commit_sha = submodule.hexsha
+
+                # Remove old submodule (keeps .git/modules)
+                submodule.remove(force=False, module=True)
+
+                # create new submodule with updated name and previous properties.
+                # set wanted tracking branch (if any)
+                submodule = self.repo.create_submodule(name=submodule_def.name, path=path, url=url,
+                                                       branch=submodule_def.tracking_branch)
+
+                # rewrite in git order (path, url, branch) to avoid unnecessary diffs
+                # Determine the .gitmodules file path for this repository
+                gitmodules_path = str(self.repo_path / '.gitmodules')
+                config = OrderedGitConfigParser(gitmodules_path)
+                config.read()
+                with config:
+                    pass
+
+                # Checkout same commit
+                submodule.module().git.checkout(commit_sha)
 
             # Update URL if it differs (handle https <-> ssh changes)
             current_url = submodule.url
             if current_url != submodule_def.url:
                 self.repo.git.config('--file', '.gitmodules',
                                      f"submodule.{submodule_def.name}.url", submodule_def.url)
-                self.repo.git.submodule('sync', '--', submodule_def.path)
+                self.repo.git.submodule('sync', '--', submodule_def.name)
 
             # Update tracking branch if it differs
             try:
+                reader = submodule.config_reader()
                 current_branch = reader.get_value('branch')
             except Exception:
                 current_branch = None
+            except IOError:
+                raise RuntimeError(f".submodule read error: {submodule_def.path}")
 
             if current_branch != submodule_def.tracking_branch:
                 if submodule_def.tracking_branch:
@@ -270,10 +344,10 @@ class GitOperations:
                         "set-branch",
                         "--branch",
                         submodule_def.tracking_branch,
-                        submodule_def.path)
+                        submodule_def.name)
                 else:
                     # Unset branch if tracking_branch is None or empty
-                    self.repo.git.submodule("set-branch", "--unset", submodule_def.path)
+                    self.repo.git.submodule("set-branch", "--unset", submodule_def.name)
 
             # Checkout the requested commit expressed by a branch/tag/hash in the submodule
             # Resolve commit-ish (branch/tag/hash) to a local SHA when possible and
@@ -291,14 +365,13 @@ class GitOperations:
 
                 try:
                     resolved_sha = sub_repo.git.rev_parse(desired_commit)
-                    resolved_sha = resolved_sha.strip()
                 except Exception as e:
                     resolved_sha = None
                     raise RuntimeError(
                         f"Failed to resolve sha of {desired_commit} in submodule {
                             submodule_def.name}: {e}")
-
-                if not self._sha_equal(current_commit, resolved_sha):
+                # TODO - Maybe checkout also if commit field is a branch even if equal
+                if not GitOperations.sha_equal(current_commit, resolved_sha):
                     try:
                         sub_repo.git.checkout(desired_commit)
                     except Exception as e:
@@ -310,6 +383,8 @@ class GitOperations:
             raise ValueError(f"Submodule not found: {submodule_def.path} : {e}")
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to sync submodule {submodule_def.name}: {e}")
+        except git.exc.InvalidGitRepositoryError as e:
+            raise RuntimeError(f"Submodule repository error for {submodule_def.path}: {e}")
 
     # NOT YET TESTED METHODS BELOW (TODO: add tests for these)
     def add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
@@ -574,3 +649,63 @@ class GitOperations:
             "modified_files": [item.a_path for item in self.repo.index.diff(None)],
             "staged_files": [item.a_path for item in self.repo.index.diff("HEAD")],
         }
+
+
+class OrderedGitConfigParser(GitConfigParser):
+    """GitConfigParser with ordered field writing"""
+
+    # Standard Git field order
+    DEFAULT_FIELD_ORDER = [
+        'path',                      # Required
+        'url',                       # Required
+        'branch',                    # Optional
+        'update',                    # Optional
+        'fetchRecurseSubmodules',    # Optional
+        'ignore',                    # Optional
+        'shallow',                   # Optional
+        'active'                     # Optional
+    ]
+
+    def __init__(self, file_or_files, read_only=False, field_order=None):
+        super().__init__(file_or_files, read_only=read_only)
+        self.field_order = field_order or self.DEFAULT_FIELD_ORDER
+
+    def write(self, fp=None):
+        """Write config with ordered fields"""
+        should_close = False
+
+        if fp is None:
+            fp = open(self._file_or_files, 'w')
+            should_close = True
+
+        try:
+            self._write_ordered(fp)
+        except IOError as e:
+            raise IOError(f"Failed to write config file: {e}")
+        finally:
+            if should_close:
+                fp.close()
+
+    def _write_ordered(self, fp):
+        """Write sections with ordered fields"""
+        all_sections = [s for s in self._sections.keys() if s != 'DEFAULT']
+
+        for i, section in enumerate(all_sections):
+            fp.write(f"[{section}]\n")
+
+            section_dict = self._sections[section]
+
+            # Write fields in order
+            for field in self.field_order:
+                if field in section_dict and field != '__name__':
+                    value = section_dict[field]
+                    fp.write(f"\t{field} = {value}\n")
+
+            # Write any fields not in field_order
+            for key, value in section_dict.items():
+                if key not in self.field_order and key != '__name__':
+                    fp.write(f"\t{key} = {value}\n")
+
+            # Blank line between sections (except last)
+            if i < len(all_sections) - 1:
+                fp.write("\n")

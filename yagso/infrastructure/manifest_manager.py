@@ -148,13 +148,13 @@ class ManifestManager:
         if not gm.exists():
             return []
 
-        git_ops = GitOperations(repo_fs_path)
-        blocks = git_ops.read_gitmodules_blocks()
+        with GitOperations(repo_fs_path) as git_ops:
+            blocks = git_ops.read_gitmodules_blocks()
 
-        results = []
-        for block in blocks:
-            sub = self._build_submodule_from_block(block, repo_fs_path, prefix_path, git_ops)
-            results.append(sub)
+            results = []
+            for block in blocks:
+                sub = self._build_submodule_from_block(block, repo_fs_path, prefix_path, git_ops)
+                results.append(sub)
 
         return results
 
