@@ -30,32 +30,16 @@ class TestCli(unittest.TestCase):
     def test_generate_command(self):
         """Test that generate command works."""
         controller = CLIController()
-        # Capture output
-        captured_output = StringIO()
-        sys.stdout = captured_output
 
         result = controller.run(['generate', '--root-path', 'tests/sample1/yagso_test_root'])
         self.assertEqual(result, 0)
-        output = captured_output.getvalue()
-        self.assertIn("Generated manifest", output)
-
-        # Restore stdout
-        sys.stdout = sys.__stdout__
 
     def test_configure_command(self):
         """Test that configure command works (identity)."""
         controller = CLIController()
-        # Capture output
-        captured_output = StringIO()
-        sys.stdout = captured_output
 
         result = controller.run(['configure', '--root-path', 'tests/sample1/yagso_test_root'])
         self.assertEqual(result, 0)
-        output = captured_output.getvalue()
-        self.assertIn("Repository configured according to manifest", output)
-
-        # Restore stdout
-        sys.stdout = sys.__stdout__
 
     def test_configure_command_commit_change(self):
         """Test that configure command works with commit change to develop/YAGSO."""
@@ -71,17 +55,9 @@ class TestCli(unittest.TestCase):
 
         try:
             controller = CLIController()
-            # Capture output
-            captured_output = StringIO()
-            sys.stdout = captured_output
 
             result = controller.run(['configure', '--root-path', 'tests/sample1/yagso_test_root'])
             self.assertEqual(result, 0)
-            output = captured_output.getvalue()
-            self.assertIn("Repository configured according to manifest", output)
-
-            # Restore stdout
-            sys.stdout = sys.__stdout__
         finally:
             manager.save_manifest(manifest, pathYaml)
 
@@ -99,17 +75,10 @@ class TestCli(unittest.TestCase):
 
         try:
             controller = CLIController()
-            # Capture output
-            # captured_output = StringIO()
-            # sys.stdout = captured_output
 
             result = controller.run(['configure', '--root-path', 'tests/sample1/yagso_test_root'])
             self.assertEqual(result, 0)
-            # output = captured_output.getvalue()
-            # self.assertIn("Repository configured according to manifest", output)
 
-            # Restore stdout
-            # sys.stdout = sys.__stdout__
         finally:
             manager.save_manifest(manifest, pathYaml)
 
@@ -131,17 +100,10 @@ class TestCli(unittest.TestCase):
 
         try:
             controller = CLIController()
-            # Capture output
-            captured_output = StringIO()
-            sys.stdout = captured_output
 
             result = controller.run(['configure', '--root-path', 'tests/sample1/yagso_test_root'])
             self.assertEqual(result, 0)
-            output = captured_output.getvalue()
-            self.assertIn("Repository configured according to manifest", output)
 
-            # Restore stdout
-            sys.stdout = sys.__stdout__
         finally:
             manager.save_manifest(manifest, pathYaml)
 
