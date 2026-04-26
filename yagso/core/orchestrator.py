@@ -36,7 +36,23 @@ class SubmoduleOrchestrator:
         self.manifest_manager = ManifestManager()
 
     def generate_manifest(self, root_path: Optional[Path] = None) -> Manifest:
-        """Generate yagso.yaml from repository structure."""
+        """Generates a YAGSO manifest (yagso.yaml) from the repository's submodule structure.
+
+        This method scans the repository's submodule structure starting from the specified root path
+        and generates a manifest file (yagso.yaml) that describes the submodules. The manifest is saved
+        in the root directory of the repository.
+
+        Args:
+            root_path (Optional[Path]): The root directory of the repository to scan for submodules.
+                If not provided, defaults to the repository path set during initialization.
+
+        Returns:
+            Manifest: The generated manifest object representing the repository's submodule structure.
+
+        Raises:
+            FileNotFoundError: If the specified root_path does not exist or is not a valid directory.
+            RuntimeError: If there is an issue generating or saving the manifest.
+        """
         if root_path is None:
             root_path = self.repo_path
 
@@ -79,7 +95,21 @@ class SubmoduleOrchestrator:
                 raise RuntimeError(f"Failed to process submodule {submodule_def.name}: {e}")
 
     def configure_repository(self, root_path: Optional[Path] = None) -> None:
-        """Apply manifest configuration to repository."""
+        """Applies the manifest configuration to synchronize the repository's submodules.
+
+        This method loads the manifest file (yagso.yaml) from the specified root path,
+        validates it, and synchronizes the repository's submodules with the manifest.
+        It ensures that the .gitmodules file and Git configuration are updated to match
+        the manifest's submodule definitions.
+
+        Args:
+            root_path (Optional[Path]): The root directory of the repository. If not provided,
+                defaults to the repository path set during initialization.
+
+        Raises:
+            FileNotFoundError: If the yagso.yaml manifest file does not exist in the specified
+                root path. Users should run 'yagso generate' to create the manifest first.
+        """
         if root_path is None:
             root_path = self.repo_path
 
