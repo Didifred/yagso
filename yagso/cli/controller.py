@@ -5,6 +5,7 @@ from typing import Dict, Any
 
 from .parser import ArgumentParser
 from .formatter import OutputFormatter
+import traceback
 from ..core.orchestrator import SubmoduleOrchestrator
 from ..core.handlers import (
     GenerateHandler,
@@ -20,9 +21,10 @@ class CLIController:
     SUCCESS = 0
     FAILURE = 1
 
-    def __init__(self):
+    def __init__(self, debug: bool = False):
         self.parser = ArgumentParser()
         self.formatter = OutputFormatter()
+        self.debug = debug  # Set to True to enable debug output
 
     def run(self, args: list) -> int:
         """Parse arguments and dispatch to appropriate command."""
@@ -56,15 +58,23 @@ class CLIController:
 
         except ValueError as e:
             self.formatter.error(str(e))
+            if self.debug:
+                self.formatter.error(traceback.format_exc())
             return self.FAILURE
         except FileNotFoundError as e:
             self.formatter.error(str(e))
+            if self.debug:
+                self.formatter.error(traceback.format_exc())
             return self.FAILURE
         except RuntimeError as e:
             self.formatter.error(str(e))
+            if self.debug:
+                self.formatter.error(traceback.format_exc())
             return self.FAILURE
         except Exception as e:
             self.formatter.error(f"Unexpected error: {e}")
+            if self.debug:
+                self.formatter.error(traceback.format_exc())
             return self.FAILURE
 
     def _create_handler(self, command: str, orchestrator: SubmoduleOrchestrator):

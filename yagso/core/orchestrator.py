@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from enum import Enum
+from dataclasses import dataclass
 import re
 from urllib.parse import urlparse
 
@@ -17,6 +18,12 @@ class DiffStatus(Enum):
     MODIFIED = 1
     ADDED = 2
     REMOVED = 3
+
+
+@dataclass
+class SearchResult:
+    status: DiffStatus
+    name: str
 
 
 class SubmoduleOrchestrator:
@@ -101,34 +108,33 @@ class SubmoduleOrchestrator:
             submodules: List[SubmoduleDefinition]) -> None:
         childs = []
 
-        git_ops = GitOperations(root_path)
-        blocks = git_ops.read_gitmodules_blocks()
+        with GitOperations(root_path) as git_ops:
+            blocks = git_ops.read_gitmodules_blocks()
 
-        for submodule in submodules:
-            #  Find suitable operation sync, add , based on manifest vs current state
-            status = self._search_submodule(submodule, blocks)
+            for submodule in submodules:
+                #  Find suitable operation sync, add , based on manifest vs current state
+                search_result = self._search_submodule(submodule, blocks)
 
-            if status == DiffStatus.MODIFIED:
-                git_ops.sync_submodule(submodule)
+                if search_result.status == DiffStatus.MODIFIED:
+                    git_ops.sync_submodule(submodule, search_result.name)
+                elif search_result.status == DiffStatus.ADDED:
+                    # git_ops.add_submodule(submodule)
+                    pass
+
+                if submodule.submodules:
+                    childs.append(submodule)
+
+            # Remaining blocks that were not matched are removed submodules
+            for block in blocks:
                 pass
-            elif status == DiffStatus.ADDED:
-                # git_ops.add_submodule(submodule)
-                pass
+                # git_ops.remove_submodule(block)
 
-            if submodule.submodules:
-                childs.append(submodule)
+            for submodule in childs:
+                new_root = root_path / Path(submodule.root_path)
+                self._sync_child_submodules(new_root, submodule.submodules)
 
-        # Remaining blocks that were not matched are removed submodules
-        for block in blocks:
-            pass
-            # git_ops.remove_submodule(block)
-
-        for submodule in childs:
-            new_root = root_path / Path(submodule.root_path)
-            self._sync_child_submodules(new_root, submodule.submodules)
-
-    def _search_submodule(self, submodule: SubmoduleDefinition, blocks: list) -> DiffStatus:
-        """Search for a submodule by path/url in the manifest and determine its
+    def _search_submodule(self, submodule: SubmoduleDefinition, blocks: list) -> SearchResult:
+        """Search for a submodule by path/url in the manifest submodule blocks and determine its
         status compared to the current repository state.
 
         Args:
@@ -136,28 +142,34 @@ class SubmoduleOrchestrator:
             blocks (list): current submodule definitions from .gitmodules
 
         Returns:
-            DiffStatus: indicating if the submodule is unchanged, modified, added
+            SearchResult: indicating if the submodule is unchanged, modified, added; and its name
         """
+
+        git_name = ""
 
         for block in blocks:
             if block.get("path") == submodule.path:
+                git_name = block.get("name")
                 if block.get("url") == submodule.url:
                     if (block.get("commit") == submodule.commit) \
                             and (block.get("branch") == submodule.tracking_branch) \
                             and (block.get("name") == submodule.name):
                         blocks.remove(block)
-                        return DiffStatus.UNCHANGED
+                        return SearchResult(DiffStatus.UNCHANGED, git_name)
                     else:
                         blocks.remove(block)
-                        return DiffStatus.MODIFIED
+                        return SearchResult(DiffStatus.MODIFIED, git_name)
                 else:
                     # URL change but same repo (eg ssh <-> https)
                     if GitOperations.is_same_repo(block.get("url", ""), submodule.url):
                         blocks.remove(block)
-                        return DiffStatus.MODIFIED
+                        return SearchResult(DiffStatus.MODIFIED, git_name)
+
+        # TODO : identify a move if same url but different path
+        # ( can be handled as a move instead of remove/add)
 
         # Otherwise, it's an added submodule
-        return DiffStatus.ADDED
+        return SearchResult(DiffStatus.ADDED, submodule.name)
 
     def commit_changes(self, message: str) -> None:
         """Commit all changes recursively."""
