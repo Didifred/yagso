@@ -17,7 +17,8 @@ class DiffStatus(Enum):
     UNCHANGED = 0
     MODIFIED = 1
     ADDED = 2
-    REMOVED = 3
+    MOVED = 3
+    REMOVED = 4
 
 
 @dataclass
@@ -147,17 +148,17 @@ class SubmoduleOrchestrator:
 
                 if search_result.status == DiffStatus.MODIFIED:
                     git_ops.sync_submodule(submodule, search_result.name)
+                elif search_result.status == DiffStatus.MOVED:
+                    git_ops.move_submodule(search_result.name, submodule.path)
                 elif search_result.status == DiffStatus.ADDED:
-                    # git_ops.add_submodule(submodule)
-                    pass
+                    git_ops.add_submodule(submodule)
 
                 if submodule.submodules:
                     childs.append(submodule)
 
             # Remaining blocks that were not matched are removed submodules
             for block in blocks:
-                pass
-                # git_ops.remove_submodule(block)
+                git_ops.remove_submodule(block)
 
             for submodule in childs:
                 new_root = root_path / Path(submodule.root_path)
@@ -180,10 +181,10 @@ class SubmoduleOrchestrator:
         for block in blocks:
             if block.get("path") == submodule.path:
                 git_name = block.get("name")
-                if block.get("url") == submodule.url:
+                if (block.get("url") == submodule.url):
                     if (block.get("commit") == submodule.commit) \
-                            and (block.get("branch") == submodule.tracking_branch) \
-                            and (block.get("name") == submodule.name):
+                            and (git_name == submodule.name) \
+                            and (block.get("branch") == submodule.tracking_branch):
                         blocks.remove(block)
                         return SearchResult(DiffStatus.UNCHANGED, git_name)
                     else:
@@ -194,11 +195,15 @@ class SubmoduleOrchestrator:
                     if GitOperations.is_same_repo(block.get("url", ""), submodule.url):
                         blocks.remove(block)
                         return SearchResult(DiffStatus.MODIFIED, git_name)
+            else:
+                # Check if same url but different path (moved)
+                if (block.get("url") == submodule.url) \
+                        and (block.get("commit") == submodule.commit) \
+                        and (git_name == submodule.name):
+                    blocks.remove(block)
+                    return SearchResult(DiffStatus.MOVED, git_name)
 
-        # TODO : identify a move if same url but different path
-        # ( can be handled as a move instead of remove/add)
-
-        # Otherwise, it's an added submodule
+        # Otherwise, it's considerated as an added submodule
         return SearchResult(DiffStatus.ADDED, submodule.name)
 
     def commit_changes(self, message: str) -> None:

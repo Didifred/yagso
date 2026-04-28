@@ -23,8 +23,8 @@ class TestOrchestratorUrlProtocolChange(unittest.TestCase):
             commit="e8e15a1ba0250adaf20ac729e4d3043ac440685d",
         )
 
-        status = orch._search_submodule(sub, blocks)
-        self.assertEqual(status, DiffStatus.MODIFIED)
+        searchResult = orch._search_submodule(sub, blocks)
+        self.assertEqual(searchResult.status, DiffStatus.MODIFIED)
 
     def test_protocol_change_ssh_to_https_detected(self):
         orch = SubmoduleOrchestrator(Path('.'))
@@ -43,8 +43,8 @@ class TestOrchestratorUrlProtocolChange(unittest.TestCase):
             commit="3324a351e9b3293ec04e48a7a4003fe853896961",
         )
 
-        status = orch._search_submodule(sub, blocks)
-        self.assertEqual(status, DiffStatus.MODIFIED)
+        searchResult = orch._search_submodule(sub, blocks)
+        self.assertEqual(searchResult.status, DiffStatus.MODIFIED)
 
 
 if __name__ == "__main__":
