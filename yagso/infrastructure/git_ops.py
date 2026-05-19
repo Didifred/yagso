@@ -421,13 +421,15 @@ class GitOperations:
             else:
                 self.repo.git.submodule('add', url, path)
         except git.GitCommandError as e:
+            self._cleanup_failed_submodule(submodule_def)
             raise RuntimeError(f"Failed to add submodule {path}: {e}")
 
-        # Initialize and update working copy (ignore non-fatal failures)
+        # Initialize and update working copy
         try:
             self.repo.git.submodule('update', '--init', '--recursive', path)
         except git.GitCommandError:
-            pass
+            self._cleanup_failed_submodule(submodule_def)
+            raise RuntimeError(f"Failed to initialize submodule {path}: {e}")
 
         # Checkout desired commit/branch inside submodule if present
         sub_repo_path = self.repo_path / path
@@ -453,8 +455,8 @@ class GitOperations:
         # Stage .gitmodules and the gitlink
         try:
             self.repo.git.add('.gitmodules')
-        except Exception:
-            pass
+        except Exception as e:
+            raise RuntimeError(f"Failed to stage submodule path {path}: {e}")
 
         try:
             self.repo.git.add(path)
@@ -464,9 +466,18 @@ class GitOperations:
     def remove_submodule(self, block: Dict[str, Any]) -> None:
         """Remove a submodule described by a parsed .gitmodules block.
 
-        This will deinitialize the submodule, remove the .gitmodules section,
-        remove the gitlink from the index and delete the worktree directory.
-        Changes are staged where applicable.
+        When a submodule matching the supplied `name` or `path` is
+        found it will be removed via GitPython which handles deinit, removal of
+        the gitlink, and cleanup of `.git/modules` when supported by the
+        installed GitPython version.
+
+        Args:
+            block: dict-like parsed `.gitmodules` entry with at least `path` and
+                optionally `name`.
+
+        Raises:
+            ValueError: if `path` is missing or the submodule cannot be found.
+            RuntimeError: if GitPython/gitrepo operations fail.
         """
         name = block.get('name')
         path = block.get('path')
@@ -475,63 +486,37 @@ class GitOperations:
             raise ValueError("Invalid submodule block: missing path")
 
         try:
-            # Deinit the submodule (remove worktree/links)
+            submodule = None
+
+            # Prefer lookup by name when available
+            if name:
+                try:
+                    submodule = self.repo.submodule(name)
+                except Exception:
+                    submodule = None
+
+            if submodule is None:
+                raise ValueError(f"Submodule not found: {path}")
+
+            # Use GitPython submodule removal API. Prefer passing `module=True`
+            # when supported to also remove entries from `.git/modules`.
             try:
-                self.repo.git.submodule('deinit', '-f', '--', path)
+                submodule.remove(force=False, module=True)
+            except Exception as e:
+                raise RuntimeError(f"Failed to remove submodule {path} via GitPython: {e}")
+
+            # Stage .gitmodules if it still exists
+            try:
+                gm_path = self.repo_path / '.gitmodules'
+                if gm_path.exists():
+                    self.repo.git.add('.gitmodules')
             except Exception:
                 pass
 
-            # Remove section from .gitmodules if present
-            gm_path = self.repo_path / '.gitmodules'
-            if gm_path.exists():
-                try:
-                    if name:
-                        # Try using git config to remove the section
-                        try:
-                            self.repo.git.config(
-                                '--file', '.gitmodules', '--remove-section', f"submodule.{name}")
-                        except git.GitCommandError:
-                            # Fallback to manual removal
-                            content = gm_path.read_text()
-                            pattern = re.compile(
-                                r'\[submodule\s+"' + re.escape(name) + r'"\][^\[]*', re.M)
-                            new = pattern.sub('', content)
-                            gm_path.write_text(new)
-                    else:
-                        # No name provided: remove by matching path entry
-                        content = gm_path.read_text()
-                        # Find any section that contains 'path = <path>'
-                        pattern = re.compile(
-                            r'\[submodule\s+"([^"]+)"\]([^\[]*path\s*=\s*' + re.escape(path) + r'[^\[]*)', re.M)
-                        new = pattern.sub('', content)
-                        gm_path.write_text(new)
-
-                    try:
-                        self.repo.git.add('.gitmodules')
-                    except Exception:
-                        pass
-                except Exception:
-                    pass
-
-            # Remove gitlink from index (stage deletion)
-            try:
-                self.repo.git.rm('-f', '--cached', '-r', path)
-            except Exception:
-                try:
-                    self.repo.index.remove([path], r=True)
-                except Exception:
-                    pass
-
-            # Remove the submodule worktree directory from filesystem
-            sub_path = self.repo_path / path
-            try:
-                if sub_path.exists():
-                    # Use shutil to remove tree safely
-                    import shutil
-                    shutil.rmtree(sub_path)
-            except Exception:
-                pass
-
+        except ValueError:
+            raise
+        except git.GitCommandError as e:
+            raise RuntimeError(f"Failed to remove submodule {path}: {e}")
         except Exception as e:
             raise RuntimeError(f"Failed to remove submodule {path}: {e}")
 
@@ -675,6 +660,29 @@ class GitOperations:
             "modified_files": [item.a_path for item in self.repo.index.diff(None)],
             "staged_files": [item.a_path for item in self.repo.index.diff("HEAD")],
         }
+
+    def _cleanup_failed_submodule(self, submodule_def: SubmoduleDefinition) -> None:
+        """Best-effort cleanup of a partially added submodule."""
+        name = submodule_def.name
+        path = submodule_def.path
+        sub_path = self.repo_path / path
+
+        with contextlib.suppress(git.GitCommandError):
+            self.repo.git.rm("--cached", path)
+
+        if sub_path.exists():
+            shutil.rmtree(sub_path)
+
+        for config, section in [
+            (".gitmodules", f"submodule.{name}"),
+            (".git/config", f"submodule.{name}"),
+        ]:
+            with contextlib.suppress(git.GitCommandError):
+                self.repo.git.config("-f", config, "--remove-section", section)
+
+        git_modules_path = self.repo_path / ".git" / "modules" / name
+        if git_modules_path.exists():
+            shutil.rmtree(git_modules_path)
 
 
 class OrderedGitConfigParser(GitConfigParser):
