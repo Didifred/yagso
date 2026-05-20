@@ -1,11 +1,13 @@
 """Infrastructure layer for Git operations using gitpython."""
 import re
 import git
+import shutil
 from pathlib import Path
 from collections import OrderedDict
 from typing import Dict, List, Any, Optional
 from git import Repo, Submodule, Git
 from git.config import GitConfigParser
+from contextlib import suppress
 from ..domain.submodule import SubmoduleDefinition
 
 
@@ -414,43 +416,29 @@ class GitOperations:
         desired_branch = submodule_def.tracking_branch
         desired_commit = submodule_def.commit
 
-        try:
-            # Use git submodule add; specify branch only when provided
-            if desired_branch:
-                self.repo.git.submodule('add', '-b', desired_branch, url, path)
-            else:
-                self.repo.git.submodule('add', url, path)
-        except git.GitCommandError as e:
-            self._cleanup_failed_submodule(submodule_def)
-            raise RuntimeError(f"Failed to add submodule {path}: {e}")
+        # create new submodule
+        submodule = self.repo.create_submodule(name=submodule_def.name, path=path, url=url,
+                                               branch=submodule_def.tracking_branch)
+
+        # rewrite in git order (path, url, branch) to avoid unnecessary diffs
+        # Determine the .gitmodules file path for this repository
+        gitmodules_path = str(self.repo_path / '.gitmodules')
+        config = OrderedGitConfigParser(gitmodules_path)
+        config.read()
+        with config:
+            pass
 
         # Initialize and update working copy
-        try:
-            self.repo.git.submodule('update', '--init', '--recursive', path)
-        except git.GitCommandError:
-            self._cleanup_failed_submodule(submodule_def)
-            raise RuntimeError(f"Failed to initialize submodule {path}: {e}")
+        submodule.update(recursive=True, init=True)
 
-        # Checkout desired commit/branch inside submodule if present
-        sub_repo_path = self.repo_path / path
-        if sub_repo_path.exists():
-            try:
-                sub_repo = Repo(sub_repo_path)
-            except git.InvalidGitRepositoryError:
-                raise RuntimeError(f"Added submodule but repository missing at {sub_repo_path}")
-
-            if desired_commit:
-                try:
-                    sub_repo.git.checkout(desired_commit)
-                except git.GitCommandError as e:
-                    raise RuntimeError(
-                        f"Failed to checkout {desired_commit} in submodule {name}: {e}")
-            elif desired_branch:
-                try:
-                    sub_repo.git.checkout(desired_branch)
-                except git.GitCommandError as e:
-                    raise RuntimeError(
-                        f"Failed to checkout {desired_commit} in submodule {name}: {e}")
+        # Checkout desired commit/branch
+        if desired_commit:
+            submodule.module().git.checkout(desired_commit)
+        elif desired_branch:
+            submodule.module().git.checkout(desired_branch)
+        else:
+            # No desired commit or branch specified, just checkout the default
+            submodule.module().git.checkout()
 
         # Stage .gitmodules and the gitlink
         try:
@@ -488,7 +476,7 @@ class GitOperations:
         try:
             submodule = None
 
-            # Prefer lookup by name when available
+            # Lookup by name since paths can be duplicated across submodules
             if name:
                 try:
                     submodule = self.repo.submodule(name)
@@ -503,18 +491,26 @@ class GitOperations:
             try:
                 submodule.remove(force=False, module=True)
             except Exception as e:
+                self._cleanup_failed_submodule(block)
+                # TODO - Consider more specific exception handling in order to not raise
+                # RuntimeError when fallback cleanup succeeds
                 raise RuntimeError(f"Failed to remove submodule {path} via GitPython: {e}")
+
+            # Remove any remaining submodule path from the filesystem if it still exists
+            root_folder = path.split('/')[0] if '/' in path else path
+            sub_path = self.repo_path / root_folder
+            if sub_path.exists():
+                shutil.rmtree(sub_path)
 
             # Stage .gitmodules if it still exists
             try:
                 gm_path = self.repo_path / '.gitmodules'
                 if gm_path.exists():
                     self.repo.git.add('.gitmodules')
-            except Exception:
-                pass
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to stage .gitmodules after removing submodule {path} : {e}")
 
-        except ValueError:
-            raise
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to remove submodule {path}: {e}")
         except Exception as e:
@@ -661,10 +657,10 @@ class GitOperations:
             "staged_files": [item.a_path for item in self.repo.index.diff("HEAD")],
         }
 
-    def _cleanup_failed_submodule(self, submodule_def: SubmoduleDefinition) -> None:
+    def _cleanup_failed_submodule(self, block: Dict[str, Any]) -> None:
         """Best-effort cleanup of a partially added submodule."""
-        name = submodule_def.name
-        path = submodule_def.path
+        name = block.name
+        path = block.path
         sub_path = self.repo_path / path
 
         with contextlib.suppress(git.GitCommandError):
