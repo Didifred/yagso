@@ -86,7 +86,7 @@ class ManifestManager:
                     raise ValueError("Empty manifest file")
                 return Manifest.from_dict(data)
         except yaml.YAMLError as e:
-            raise ValueError(f"Invalid YAML in manifest: {e}")
+            raise ValueError(f"Invalid YAML in manifest: {e}") from e
 
     def save_manifest(self, manifest: Manifest, path: Path) -> None:
         """Save manifest to yagso.yaml file.
@@ -105,7 +105,7 @@ class ManifestManager:
                 yaml.dump(manifest.to_dict(), f,
                           default_flow_style=False, sort_keys=False)
         except IOError as e:
-            raise IOError(f"Failed to save manifest: {e}")
+            raise IOError(f"Failed to save manifest: {e}") from e
 
     def generate_from_repository(self, root_path: Path) -> Manifest:
         """Generate manifest from existing .gitmodules file.

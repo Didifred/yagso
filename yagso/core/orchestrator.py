@@ -74,26 +74,22 @@ class SubmoduleOrchestrator:
         manifest = self.manifest_manager.load_manifest(manifest_path)
 
         for submodule_def in manifest.submodules:
-            try:
-                if options.get("init", False):
-                    # Clone if not exists, then update
-                    if not (self.repo_path / submodule_def.path).exists():
-                        # self.git_ops.clone_submodule(
-                        #    submodule_def.url,
-                        #    submodule_def.path,
-                        #    submodule_def.tracking_branch
-                        # )
-                        pass
-                    else:
-                        # self.git_ops.update_submodule(submodule_def.path, options)
-                        pass
+            if options.get("init", False):
+                # Clone if not exists, then update
+                if not (self.repo_path / submodule_def.path).exists():
+                    # self.git_ops.clone_submodule(
+                    #    submodule_def.url,
+                    #    submodule_def.path,
+                    #    submodule_def.tracking_branch
+                    # )
+                    pass
                 else:
-                    # Just update existing
                     # self.git_ops.update_submodule(submodule_def.path, options)
                     pass
-
-            except Exception as e:
-                raise RuntimeError(f"Failed to process submodule {submodule_def.name}: {e}")
+            else:
+                # Just update existing
+                # self.git_ops.update_submodule(submodule_def.path, options)
+                pass
 
     def configure_repository(self, root_path: Optional[Path] = None) -> None:
         """Applies the manifest configuration to synchronize the repository's submodules.

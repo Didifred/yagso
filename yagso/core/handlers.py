@@ -28,9 +28,6 @@ class GenerateHandler(CommandHandler):
         root_path = options.get("root_path")
         root_path = Path(root_path) if root_path else Path.cwd()
 
-        if not (root_path / ".git").exists():
-            raise ValueError(f"Not a Git repository: {root_path}")
-
         manifest = self.orchestrator.generate_manifest(root_path)
         formatter.success(f"Generated manifest with {len(manifest.submodules)} submodules")
 
@@ -55,9 +52,6 @@ class ConfigureHandler(CommandHandler):
 
         root_path = options.get("root_path")
         root_path = Path(root_path) if root_path else Path.cwd()
-
-        if not (root_path / ".git").exists():
-            raise ValueError(f"Not a Git repository: {root_path}")
 
         self.orchestrator.configure_repository(root_path)
         formatter.success("Repository configured according to manifest")

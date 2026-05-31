@@ -4,11 +4,40 @@ import yaml
 import copy
 from io import StringIO
 from pathlib import Path
+from git import Repo
 from yagso.cli.controller import CLIController
 from yagso.infrastructure.manifest_manager import ManifestManager
 
 
 class TestCli(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        """Set up test repository state once for all tests."""
+        cls.test_root = Path('tests/sample1/yagso_test_root')
+
+    def setUp(self):
+        """Reset test repository to clean state before each test."""
+        try:
+
+            # Remove any adding submodule that may have been added in a previous test
+            block = {
+                "name": 'testaddedsub',
+                "path": 'libs/addedsub'
+            }
+            git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
+            git_ops.remove_submodule(block, True)
+
+            # Reset main repository
+            repo = Repo(self.test_root)
+            repo.git.reset('--hard', 'HEAD')
+
+            # Reset all submodules recursively
+            repo.git.submodule('foreach', '--recursive', 'git reset --hard HEAD')
+
+        except Exception:
+            # If reset fails, continue anyway - test may still pass
+            pass
+
     def test_controller_creation(self):
         """Test that CLIController can be created."""
         controller = CLIController()

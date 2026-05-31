@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 import git
+import shutil
 from pathlib import Path
 
 from git import Repo
@@ -10,6 +11,34 @@ from yagso.domain.submodule import SubmoduleDefinition
 
 
 class TestGitOps(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        """Set up test repository state once for all tests."""
+        cls.test_root = Path('tests/sample1/yagso_test_root')
+
+    def setUp(self):
+        """Reset test repository to clean state before each test."""
+        try:
+
+            # Remove any adding submodule that may have been added in a previous test
+            block = {
+                "name": 'testaddedsub',
+                "path": 'libs/addedsub'
+            }
+            git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
+            git_ops.remove_submodule(block, True)
+
+            # Reset main repository
+            repo = Repo(self.test_root)
+            repo.git.reset('--hard', 'HEAD')
+
+            # Reset all submodules recursively
+            repo.git.submodule('foreach', '--recursive', 'git reset --hard HEAD')
+
+        except Exception:
+            # If reset fails, continue anyway - test may still pass
+            pass
+
     def test_remove_submodule(self):
         # First add a submodule then remove it to test the cleanup logic
 
@@ -25,20 +54,25 @@ class TestGitOps(unittest.TestCase):
 
         try:
             git_ops.add_submodule(sub_def)
+
+            blocks = git_ops.read_gitmodules_blocks()
+
+            found = False
+            for block in blocks:
+                if block.get("name") == sub_def.name:
+                    found = True
+                    break
+
         except Exception as e:
-            pass
-
-        blocks = git_ops.read_gitmodules_blocks()
-
-        found = False
-        for block in blocks:
-            if block.get("name") == sub_def.name:
-                found = True
-                break
+            self.fail(f"add_submodule raised an exception: {e}")
 
         if found:
             try:
-                git_ops.remove_submodule(block)
+                git_ops.remove_submodule(block, False)
+                module_dir = self.test_root / '.git' / 'modules' / sub_def.name
+                self.assertFalse(
+                    module_dir.exists(),
+                    "Root .git module metadata should be removed after remove_submodule")
             except Exception as e:
                 self.fail(f"remove_submodule raised an exception: {e}")
         else:
