@@ -42,7 +42,7 @@ class CLIController:
             if options.get("root_path"):
                 repo_path = Path(options["root_path"])
 
-            # Check if it's a git repository (except for generate which can create manifest)
+            # Check if it's a git repository
             if not (repo_path / ".git").exists():
                 self.formatter.error(f"Not a Git repository: {repo_path}")
                 return self.FAILURE
@@ -56,23 +56,9 @@ class CLIController:
 
             return self.SUCCESS
 
-        except ValueError as e:
-            self.formatter.error(str(e))
-            if self.debug:
-                self.formatter.error(traceback.format_exc())
-            return self.FAILURE
-        except FileNotFoundError as e:
-            self.formatter.error(str(e))
-            if self.debug:
-                self.formatter.error(traceback.format_exc())
-            return self.FAILURE
-        except RuntimeError as e:
-            self.formatter.error(str(e))
-            if self.debug:
-                self.formatter.error(traceback.format_exc())
-            return self.FAILURE
         except Exception as e:
-            self.formatter.error(f"Unexpected error: {e}")
+            # Catch all exceptions at the CLI boundary (catch late principle)
+            self.formatter.error(str(e))
             if self.debug:
                 self.formatter.error(traceback.format_exc())
             return self.FAILURE

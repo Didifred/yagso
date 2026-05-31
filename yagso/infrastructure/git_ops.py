@@ -106,8 +106,8 @@ class GitOperations:
         if self._repo is None:
             try:
                 self._repo = Repo(self.repo_path)
-            except git.InvalidGitRepositoryError:
-                raise ValueError(f"Not a valid Git repository: {self.repo_path}")
+            except git.InvalidGitRepositoryError as e:
+                raise ValueError(f"Not a valid Git repository: {self.repo_path}") from e
 
         return self._repo
 
@@ -254,7 +254,7 @@ class GitOperations:
                     block["branch"] = item.get("branch")
                 blocks.append(block)
         except Exception as e:
-            raise IOError(f"Failed to read submodules via GitPython: {e}")
+            raise IOError(f"Failed to read submodules via GitPython: {e}") from e
 
         return blocks
 
@@ -337,8 +337,6 @@ class GitOperations:
                 current_branch = reader.get_value('branch')
             except Exception:
                 current_branch = None
-            except IOError:
-                raise RuntimeError(f".submodule read error: {submodule_def.path}")
 
             if current_branch != submodule_def.tracking_branch:
                 if submodule_def.tracking_branch:
@@ -379,14 +377,14 @@ class GitOperations:
                     except Exception as e:
                         raise RuntimeError(
                             f"Failed to checkout {desired_commit} in submodule {
-                                submodule_def.name}: {e}")
+                                submodule_def.name}: {e}") from e
 
         except ValueError as e:
-            raise ValueError(f"Submodule not found: {submodule_def.path} : {e}")
+            raise ValueError(f"Submodule not found: {submodule_def.path}: {e}") from e
         except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to sync submodule {submodule_def.name}: {e}")
+            raise RuntimeError(f"Failed to sync submodule {submodule_def.name}: {e}") from e
         except git.exc.InvalidGitRepositoryError as e:
-            raise RuntimeError(f"Submodule repository error for {submodule_def.path}: {e}")
+            raise RuntimeError(f"Submodule repository error for {submodule_def.path}: {e}") from e
 
     # NOT YET TESTED METHODS BELOW (TODO: add tests for these)
     def add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
@@ -444,14 +442,14 @@ class GitOperations:
         try:
             self.repo.git.add('.gitmodules')
         except Exception as e:
-            raise RuntimeError(f"Failed to stage submodule path {path}: {e}")
+            raise RuntimeError(f"Failed to stage .gitmodules: {e}") from e
 
         try:
             self.repo.git.add(path)
         except Exception as e:
-            raise RuntimeError(f"Failed to stage submodule path {path}: {e}")
+            raise RuntimeError(f"Failed to stage submodule path {path}: {e}") from e
 
-    def remove_submodule(self, block: Dict[str, Any]) -> None:
+    def remove_submodule(self, block: Dict[str, Any], cleanup: bool) -> None:
         """Remove a submodule described by a parsed .gitmodules block.
 
         When a submodule matching the supplied `name` or `path` is
@@ -473,48 +471,61 @@ class GitOperations:
         if not path:
             raise ValueError("Invalid submodule block: missing path")
 
+        if not name:
+            raise ValueError("Invalid submodule block: missing name")
+
+        # Lookup by name since paths can be duplicated across submodules
         try:
-            submodule = None
+            submodule = self.repo.submodule(name)
+            submodule_git_dir = self._get_submodule_git_dir(submodule)
 
-            # Lookup by name since paths can be duplicated across submodules
-            if name:
-                try:
-                    submodule = self.repo.submodule(name)
-                except Exception:
-                    submodule = None
-
-            if submodule is None:
-                raise ValueError(f"Submodule not found: {path}")
-
-            # Use GitPython submodule removal API. Prefer passing `module=True`
-            # when supported to also remove entries from `.git/modules`.
-            try:
-                submodule.remove(force=False, module=True)
-            except Exception as e:
-                self._cleanup_failed_submodule(block)
-                # TODO - Consider more specific exception handling in order to not raise
-                # RuntimeError when fallback cleanup succeeds
-                raise RuntimeError(f"Failed to remove submodule {path} via GitPython: {e}")
-
-            # Remove any remaining submodule path from the filesystem if it still exists
-            root_folder = path.split('/')[0] if '/' in path else path
-            sub_path = self.repo_path / root_folder
-            if sub_path.exists():
-                shutil.rmtree(sub_path)
-
-            # Stage .gitmodules if it still exists
-            try:
-                gm_path = self.repo_path / '.gitmodules'
-                if gm_path.exists():
-                    self.repo.git.add('.gitmodules')
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to stage .gitmodules after removing submodule {path} : {e}")
-
-        except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to remove submodule {path}: {e}")
+            submodule.remove(force=False, module=True)
+            if cleanup:
+                self._cleanup_submodule_module(submodule_git_dir, path, name)
         except Exception as e:
-            raise RuntimeError(f"Failed to remove submodule {path}: {e}")
+            raise RuntimeError(f"Failed to remove submodule {name} at {path}: {e}") from e
+
+        # Remove any remaining submodule path from the filesystem if it still exists
+        # and is empty (no files inside). Extract root folder only.
+        root_path = Path(path).parts[0] if Path(path).parts else path
+        root_folder = self.repo_path / root_path
+        if root_folder.exists() and root_folder.is_dir():
+            try:
+                # Only remove if directory is empty
+                root_folder.rmdir()
+            except OSError:
+                # Directory not empty, leave it as is, may contain other submodules or user files
+                pass
+
+        # Stage .gitmodules if it still exists
+        try:
+            gm_path = self.repo_path / '.gitmodules'
+            if gm_path.exists():
+                self.repo.git.add('.gitmodules')
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to stage .gitmodules after removing submodule {path}: {e}") from e
+
+    def _get_submodule_git_dir(self, submodule: Submodule) -> Path:
+        """Return the submodule repository's git directory path."""
+        module_repo = submodule.module()
+        git_dir = Path(module_repo.git_dir)
+
+        if not git_dir.is_absolute():
+            worktree_path = self.repo_path / submodule.path
+            git_dir = (worktree_path / git_dir).resolve()
+
+        return git_dir
+
+    def _cleanup_submodule_module(self, module_git_dir: Path, path: str, name: str) -> None:
+        """Remove root .git submodule metadata left behind by remove()."""
+
+        # Remove the submodule's directory in .git directory if it still exists
+        if module_git_dir and module_git_dir.exists():
+            if module_git_dir.is_dir():
+                shutil.rmtree(module_git_dir)
+            else:
+                module_git_dir.unlink()
 
     def move_submodule(self, name: str, new_path: str) -> None:
         """Move a submodule to a new path using `git mv` and update .gitmodules.
@@ -534,8 +545,8 @@ class GitOperations:
         """
         try:
             submodule = self.repo.submodule(name)
-        except Exception:
-            raise ValueError(f"Submodule not found: {name}")
+        except Exception as e:
+            raise ValueError(f"Submodule not found: {name}") from e
 
         old_path = submodule.path
         if old_path == new_path:
@@ -563,9 +574,9 @@ class GitOperations:
                 pass
 
         except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to move submodule {name} to {new_path}: {e}")
+            raise RuntimeError(f"Failed to move submodule {name} to {new_path}: {e}") from e
         except Exception as e:
-            raise RuntimeError(f"Failed to move submodule {name} to {new_path}: {e}")
+            raise RuntimeError(f"Failed to move submodule {name} to {new_path}: {e}") from e
 
     def clone_submodule(self, url: str, path: str, branch: str = "main") -> None:
         """Clone a submodule."""
@@ -573,7 +584,7 @@ class GitOperations:
             # Use git command to add submodule
             self.repo.git.submodule("add", "-b", branch, url, path)
         except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to clone submodule {path}: {e}")
+            raise RuntimeError(f"Failed to clone submodule {path}: {e}") from e
 
     def update_submodule(self, path: str, options: Dict[str, Any]) -> None:
         """Update a specific submodule."""
@@ -593,9 +604,9 @@ class GitOperations:
                     submodule_repo.remotes.origin.pull()
 
         except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to update submodule {path}: {e}")
-        except ValueError:
-            raise ValueError(f"Submodule not found: {path}")
+            raise RuntimeError(f"Failed to update submodule {path}: {e}") from e
+        except ValueError as e:
+            raise ValueError(f"Submodule not found: {path}") from e
 
     def update_all_submodules(self, options: Dict[str, Any]) -> None:
         """Update all submodules."""
@@ -623,7 +634,7 @@ class GitOperations:
                         submodule_repo.index.commit(f"Update {submodule.name}: {message}")
 
         except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to commit changes: {e}")
+            raise RuntimeError(f"Failed to commit changes: {e}") from e
 
     def push_all(self) -> None:
         """Push all commits to remote."""
@@ -644,9 +655,9 @@ class GitOperations:
                         pass
 
         except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to push changes: {e}")
+            raise RuntimeError(f"Failed to push changes: {e}") from e
         except ValueError as e:
-            raise RuntimeError(f"No remote origin configured: {e}")
+            raise RuntimeError(f"No remote origin configured: {e}") from e
 
     def get_status(self) -> Dict[str, Any]:
         """Get repository status."""
@@ -659,12 +670,12 @@ class GitOperations:
 
     def _cleanup_failed_submodule(self, block: Dict[str, Any]) -> None:
         """Best-effort cleanup of a partially added submodule."""
-        name = block.name
-        path = block.path
+        name = block.get('name')
+        path = block.get('path')
         sub_path = self.repo_path / path
 
-        with contextlib.suppress(git.GitCommandError):
-            self.repo.git.rm("--cached", path)
+        # with contextlib.suppress(git.GitCommandError):
+        self.repo.git.rm("--cached", path)
 
         if sub_path.exists():
             shutil.rmtree(sub_path)
@@ -711,7 +722,7 @@ class OrderedGitConfigParser(GitConfigParser):
         try:
             self._write_ordered(fp)
         except IOError as e:
-            raise IOError(f"Failed to write config file: {e}")
+            raise IOError(f"Failed to write config file: {e}") from e
         finally:
             if should_close:
                 fp.close()
