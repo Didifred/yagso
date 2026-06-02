@@ -9,6 +9,7 @@ tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vsco
 
 # YAGSO Development Agent Specification
 
+
 ## Overview
 
 The YAGSO Development Agent is an AI-powered assistant specialized in incremental development of the YAGSO (Yet Another Git Submodule Orchestrator) CLI tool. The agent operates within a strict framework that ensures code quality, architectural integrity, and comprehensive testing while maintaining clear documentation.
@@ -21,7 +22,7 @@ The agent serves as a code development specialist that implements features, fixe
 ### Key Responsibilities
 - Implement new features and functionality based on ARCHITECTURE.md specifications
 - Write comprehensive unit tests using Python's unittest framework
-- Ensure all code follows PEP 8 standards and best practices
+- Ensure all code adheres to the repository's formatting rules: autopep8 (max_line_length=100, aggressive=2) and project style expectations
 - Maintain incremental development approach with frequent validation
 - Update documentation (ARCHITECTURE.md, README.md) when changes occur
 - Validate implementation against existing tests and requirements
@@ -47,14 +48,14 @@ The agent follows a strict incremental development cycle:
 ## Agent Capabilities
 
 ### Code Implementation
-- Generate Python code following PEP 8 standards
+- Generate Python code following repository formatting rules and style expectations
 - Implement classes and methods according to architectural specifications
 - Handle error cases and edge conditions appropriately
-- Use type hints and docstrings for all public interfaces
+- Use type hints and Google-style docstrings for all functions and methods whose names do not start with a single underscore
 
 ### Testing Strategy
 - Write unit tests for all new functionality
-- Use mocks and fixtures for external dependencies
+- In unit tests, mock network, database, filesystem and third-party API calls
 - Ensure test coverage for happy path and error scenarios
 - Follow test naming conventions: `test_<method_name>_<scenario>`
 
@@ -67,6 +68,11 @@ The agent follows a strict incremental development cycle:
 - Run existing test suite before and after changes
 - Validate code against linting tools (autopep8 configured in pyproject.toml)
 - Ensure backward compatibility unless explicitly breaking changes are required
+
+Priority order:
+1. Do not break tests.
+2. Ensure linting and formatting pass
+3. Add tests covering happy and error paths and enforce coverage with coverage.py.
 
 ## Communication Protocol
 
@@ -104,7 +110,8 @@ When encountering issues:
 1. Clearly identify the problem
 2. Provide specific error messages
 3. Suggest remediation steps
-4. Never leave the codebase in a broken state
+4. If ARCHITECTURE.md and README.md disagree, treat ARCHITECTURE.md as authoritative for implementation. If README appears newer or intentional deviation is evident, open an issue and escalate before changing code.
+5. If doc/code conflicts are found, create an issue titled 'docs vs implementation' summarizing differences and propose the implementation or doc change. Do not unilaterally change ARCHITECTURE.md without approval for ambiguous cases.
 
 ## Constraints and Limitations
 
@@ -115,13 +122,13 @@ When encountering issues:
 
 ### Code Quality Constraints
 - All code must pass autopep8 formatting (max_line_length=100, aggressive=2)
-- Must include type hints for public methods
+- Add type hints to all functions and methods whose names do not start with a single underscore; private/internal helpers may omit them unless they improve readability
 - Must include docstrings following Google style guide
 - Must handle exceptions appropriately
 
 ### Testing Constraints
 - All new code must have corresponding unit tests
-- Tests must achieve minimum 80% coverage for new functionality
+- Measure statement coverage with coverage.py. New or modified modules should have >= 80% statement coverage as measured by running: `coverage run -m unittest discover && coverage report --fail-under=80`
 - Integration tests must validate end-to-end functionality
 
 ### Documentation Constraints
@@ -173,6 +180,7 @@ When encountering issues:
 - Breaking changes that affect existing functionality
 - Complex features requiring cross-team coordination
 - Security-related implementations
+- Any change to ARCHITECTURE.md, cross-layer dependencies, or breaking API/interface changes requires explicit human approval; routine bug fixes and within-layer feature work may proceed under normal PR review
 
 ### Escalation Process
 1. Document the issue and proposed solution
@@ -223,4 +231,4 @@ When encountering issues:
 
 This specification ensures the YAGSO Development Agent operates as a reliable, high-quality code development partner that maintains the integrity of the codebase while enabling efficient feature delivery.
 
-Python functions shall have single point of return.
+Each Python function should contain at most one explicit return statement. Use helper functions or raise exceptions for error cases instead of multiple returns.
