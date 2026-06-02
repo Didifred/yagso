@@ -357,26 +357,39 @@ class GitOperations:
                 raise ValueError(f"Submodule path does not exist: {sub_repo_path}")
 
             current_commit = self.get_recorded_commit(submodule_def.path)
-            desired_commit = submodule_def.commit
+            desired_ref = submodule_def.commit
 
             # Only attempt resolution/checkout when a desired ref is provided
-            if desired_commit:
+            if desired_ref:
                 sub_repo = Repo(sub_repo_path)
+                resolved_sha = None
+                resolved_from_origin = False
 
                 try:
-                    resolved_sha = sub_repo.git.rev_parse(desired_commit)
-                except Exception as e:
-                    resolved_sha = None
-                    raise RuntimeError(
-                        f"Failed to resolve sha of {desired_commit} in submodule {
-                            submodule_def.name}: {e}")
+                    resolved_sha = sub_repo.git.rev_parse(desired_ref)
+                except Exception:
+                    # Try on origin if local resolution fails
+                    origin_ref = f'origin/{desired_ref}'
+                    try:
+                        resolved_sha = sub_repo.git.rev_parse(origin_ref)
+                        resolved_from_origin = True
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Failed to resolve sha of {desired_ref} in submodule {
+                                submodule_def.name}") from e
+
                 # TODO - Maybe checkout also if commit field is a branch even if equal
                 if not GitOperations.sha_equal(current_commit, resolved_sha):
                     try:
-                        sub_repo.git.checkout(desired_commit)
+                        if resolved_from_origin:
+                            # Create a new local branch tracking origin
+                            sub_repo.git.checkout(
+                                "-b", desired_ref, "--track", origin_ref)
+                        else:
+                            sub_repo.git.checkout(desired_ref)
                     except Exception as e:
                         raise RuntimeError(
-                            f"Failed to checkout {desired_commit} in submodule {
+                            f"Failed to checkout {desired_ref} in submodule {
                                 submodule_def.name}: {e}") from e
 
         except ValueError as e:
@@ -386,7 +399,6 @@ class GitOperations:
         except git.exc.InvalidGitRepositoryError as e:
             raise RuntimeError(f"Submodule repository error for {submodule_def.path}: {e}") from e
 
-    # NOT YET TESTED METHODS BELOW (TODO: add tests for these)
     def add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
         """Add a new submodule according to the SubmoduleDefinition.
 
@@ -480,9 +492,9 @@ class GitOperations:
             submodule_git_dir = self._get_submodule_git_dir(submodule)
 
             submodule.remove(force=False, module=True)
-            if cleanup:
-                self._cleanup_submodule_module(submodule_git_dir, path, name)
+            self._cleanup_submodule_module(submodule_git_dir, path, name)
         except Exception as e:
+            # TODO find the submodule git dir ... to cleanup .git/modules
             raise RuntimeError(f"Failed to remove submodule {name} at {path}: {e}") from e
 
         # Remove any remaining submodule path from the filesystem if it still exists
