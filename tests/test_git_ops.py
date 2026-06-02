@@ -21,23 +21,37 @@ class TestGitOps(unittest.TestCase):
         try:
 
             # Remove any adding submodule that may have been added in a previous test
-            block = {
+            block0 = {
                 "name": 'testaddedsub',
                 "path": 'libs/addedsub'
             }
             git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
-            git_ops.remove_submodule(block, True)
-
-            # Reset main repository
-            repo = Repo(self.test_root)
-            repo.git.reset('--hard', 'HEAD')
-
-            # Reset all submodules recursively
-            repo.git.submodule('foreach', '--recursive', 'git reset --hard HEAD')
-
+            git_ops.remove_submodule(block0, True)
         except Exception:
-            # If reset fails, continue anyway - test may still pass
             pass
+
+        try:
+            block1 = {
+                "name": 'innerLib3Test',
+                "path": 'lib2/lib3'
+            }
+            git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
+            git_ops.remove_submodule(block1, True)
+        except Exception:
+            pass
+
+        repo = Repo(self.test_root)
+
+        # Reset main repository
+        repo.git.reset('--hard', 'HEAD')
+
+        # Reset all submodules recursively
+        repo.git.submodule('foreach', '--recursive', 'git reset --hard HEAD')
+
+        # Rebuild .git from .gitmodules
+        # repo.git.submodule('deinit', '--all', '-f')
+        # repo.git.submodule('init')
+        # repo.git.submodule('update', '--init', '--recursive')
 
     def test_remove_submodule(self):
         # First add a submodule then remove it to test the cleanup logic
