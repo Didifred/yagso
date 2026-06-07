@@ -19,25 +19,28 @@ class TestCli(unittest.TestCase):
 
     def setUp(self):
         """Reset test repository to clean state before each test."""
-        try:
+        git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
 
-            # Remove any adding submodule that may have been added in a previous test
-            block0 = {
-                "name": 'testaddedsub',
-                "path": 'libs/addedsub'
-            }
-            git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
-            git_ops.remove_submodule(block0, True)
+        try:
+            submodule_path = self.test_root / 'libs/addedsub'
+            if submodule_path.exists():
+                # Remove any adding submodule that may have been added in a previous test
+                block0 = {
+                    "name": 'testaddedsub',
+                    "path": 'libs/addedsub'
+                }
+                git_ops.remove_submodule(block0, True)
         except Exception:
             pass
 
         try:
-            block1 = {
-                "name": 'innerLib3Test',
-                "path": 'lib2/lib3'
-            }
-            git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
-            git_ops.remove_submodule(block1, True)
+            submodule_path = self.test_root / 'lib2/lib3'
+            if submodule_path.exists():
+                block1 = {
+                    "name": 'innerLib3Test',
+                    "path": 'lib2/lib3'
+                }
+                git_ops.remove_submodule(block1, True)
         except Exception:
             pass
 

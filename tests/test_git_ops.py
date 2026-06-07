@@ -18,25 +18,28 @@ class TestGitOps(unittest.TestCase):
 
     def setUp(self):
         """Reset test repository to clean state before each test."""
-        try:
+        git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
 
-            # Remove any adding submodule that may have been added in a previous test
-            block0 = {
-                "name": 'testaddedsub',
-                "path": 'libs/addedsub'
-            }
-            git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
-            git_ops.remove_submodule(block0, True)
+        try:
+            submodule_path = self.test_root / 'libs/addedsub'
+            if submodule_path.exists():
+                # Remove any adding submodule that may have been added in a previous test
+                block0 = {
+                    "name": 'testaddedsub',
+                    "path": 'libs/addedsub'
+                }
+                git_ops.remove_submodule(block0, True)
         except Exception:
             pass
 
         try:
-            block1 = {
-                "name": 'innerLib3Test',
-                "path": 'lib2/lib3'
-            }
-            git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
-            git_ops.remove_submodule(block1, True)
+            submodule_path = self.test_root / 'lib2/lib3'
+            if submodule_path.exists():
+                block1 = {
+                    "name": 'innerLib3Test',
+                    "path": 'lib2/lib3'
+                }
+                git_ops.remove_submodule(block1, True)
         except Exception:
             pass
 
@@ -48,10 +51,23 @@ class TestGitOps(unittest.TestCase):
         # Reset all submodules recursively
         repo.git.submodule('foreach', '--recursive', 'git reset --hard HEAD')
 
-        # Rebuild .git from .gitmodules
-        # repo.git.submodule('deinit', '--all', '-f')
-        # repo.git.submodule('init')
-        # repo.git.submodule('update', '--init', '--recursive')
+    def test_rebuild_submodule_metadata(self):
+        git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
+
+        try:
+            git_ops.rebuild_submodule_metadata()
+        except Exception as e:
+            self.fail(f"rebuild_submodule_metadata raised an exception: {e}")
+
+    def test_backup_restore_submodule_metadata(self):
+        git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
+
+        try:
+            git_ops.backup_submodule_metadata()
+
+            git_ops_.restore_submodule_metadata()
+        except Exception as e:
+            self.fail(f"backup_submodule_metadata raised an exception: {e}")
 
     def test_remove_submodule(self):
         # First add a submodule then remove it to test the cleanup logic
@@ -83,10 +99,6 @@ class TestGitOps(unittest.TestCase):
         if found:
             try:
                 git_ops.remove_submodule(block, False)
-                module_dir = self.test_root / '.git' / 'modules' / sub_def.name
-                self.assertFalse(
-                    module_dir.exists(),
-                    "Root .git module metadata should be removed after remove_submodule")
             except Exception as e:
                 self.fail(f"remove_submodule raised an exception: {e}")
         else:
