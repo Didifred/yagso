@@ -33,7 +33,6 @@ class SubmoduleOrchestrator:
     def __init__(self, repo_path: Path):
         """Initialize with repository path."""
         self.repo_path = repo_path
-        # self.git_ops = GitOperations(repo_path)
         self.manifest_manager = ManifestManager()
 
     def generate_manifest(self, root_path: Optional[Path] = None) -> Manifest:
