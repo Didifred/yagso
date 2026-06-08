@@ -3,9 +3,11 @@ from pathlib import Path
 
 from yagso.core.orchestrator import SubmoduleOrchestrator, DiffStatus
 from yagso.domain.submodule import SubmoduleDefinition
+from tests.common import BaseGitTest
 
 
-class TestOrchestratorUrlProtocolChange(unittest.TestCase):
+class TestOrchestratorUrlProtocolChange(BaseGitTest):
+
     def test_protocol_change_https_to_ssh_detected(self):
         orch = SubmoduleOrchestrator(Path('.'))
         blocks = [{

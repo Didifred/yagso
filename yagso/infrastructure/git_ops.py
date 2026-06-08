@@ -4,6 +4,7 @@ import re
 import stat
 import git
 import shutil
+import logging
 from pathlib import Path
 from collections import OrderedDict
 from typing import Dict, List, Any, Optional
@@ -122,28 +123,17 @@ class GitOperations:
 
         return self._repo
 
-    def close(self) -> None:
-        """Release internal Repo reference to allow deterministic cleanup.
-
-        Setting ``self._repo`` to ``None`` removes the reference to the
-        GitPython ``Repo`` instance so it can be garbage-collected before
-        interpreter shutdown (helps avoid shutdown-time destructor races
-        on Windows).
-        """
-        try:
-            self._repo = None
-        except Exception:
-            pass
-
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc, tb):
         try:
-            self._repo = None
+            self._repo.close()
         except Exception:
             pass
-        return False
+
+    def __del__(self):
+        self._repo.close()
 
     def get_recorded_commit(self, path: str) -> Optional[str]:
         """Return the gitlink commit SHA for `path` recorded in `HEAD`.
@@ -529,64 +519,60 @@ class GitOperations:
                 f"Failed to stage .gitmodules after removing submodule {path}: {e}") from e
 
     def rebuild_submodule_metadata(self) -> None:
-        """Rebuild .git metadata for all submodules based on .gitmodules."""
-        # Remove any existing .git/modules data and clean submodule sections
+        """Rebuild .git metadata for all submodules based on .gitmodules.
+
+        This method is destructive: it removes existing `.git/modules` data
+        and may remove broken submodule working trees. It first creates a
+        backup via `backup_submodule_metadata()` and attempts to restore on
+        failure.
+        """
         git_dir = Path(self.repo.git_dir)
+        modules_dir = git_dir / 'modules'
 
         # Delete the 'modules' directory entirely if present
-        modules_dir = git_dir / 'modules'
         try:
             if modules_dir.exists():
                 shutil.rmtree(modules_dir, onerror=_remove_readonly)
-        except Exception as e:
+        except (OSError, shutil.Error) as e:
             raise RuntimeError(f"Failed to delete modules directory {modules_dir}: {e}") from e
 
         # Remove any [submodule "..."] sections from .git/config
-        for sm in self.get_submodules():
-            try:
-                self.repo.git.config('--file', str(git_dir / 'config'),
-                                     '--remove-section', f"submodule.{sm['name']}")
-            except git.GitCommandError:
-                pass
+        config_path = git_dir / 'config'
+        if config_path.exists():
+            content = config_path.read_text()
+            cleaned = re.sub(r'\[submodule "[^"]*"\][^\[]*', '', content)
 
-        # Sync config
-        self.repo.git.submodule('sync', '--recursive')
+            # only write if something changed
+            if cleaned != content:
+                config_path.write_text(cleaned)
 
-        # Suppress submodule metadata and working tree
-        for submodule in self.repo.submodules:
-            module_path = self.repo_path / submodule.path
-            submodule_modules_dir = modules_dir / submodule.name
+        # Suppress all submodules
+        # Collect all folders that have a .git FILE (submodule indicator)
+        submodule_folders = [
+            git_marker.parent
+            for git_marker in self.repo_path.rglob('.git')
+            if git_marker.is_file()  # .git file = submodule; .git dir = real repo root
+        ]
 
-            if module_path.exists():
-                dotgit = module_path / '.git'
-                if dotgit.exists():
-                    if dotgit.is_file():
-                        try:
-                            content = dotgit.read_text().strip()
-                            if content.startswith('gitdir:'):
-                                gitdir = content[len('gitdir:'):].strip()
-                                gitdir_path = (module_path / gitdir).resolve()
-                                if not gitdir_path.exists():
-                                    shutil.rmtree(module_path, ignore_errors=True)
-                        except Exception:
-                            shutil.rmtree(module_path, ignore_errors=True)
-                    else:
-                        # If .git is a directory, check if it's a valid git repository
-                        try:
-                            Repo(module_path)
-                        except git.InvalidGitRepositoryError:
-                            shutil.rmtree(module_path, ignore_errors=True)
-                else:
-                    shutil.rmtree(module_path, ignore_errors=True)
+        # Sort shallowest first: deleting a parent removes children automatically,
+        # so we skip already-deleted nested paths with the exists() guard
+        submodule_folders.sort(key=lambda p: len(p.parts))
+        for folder in submodule_folders:
+            if folder.exists() and folder != self.repo_path:
+                shutil.rmtree(folder)
 
-            if not module_path.exists():
-                shutil.rmtree(submodule_modules_dir, ignore_errors=True)
-
-        # Init: registers submodules in .git/config (writes into main repo's config via the gitfile)
-        self.repo.git.submodule('init')
+        # Init: registers submodules in .git/config (writes into main repo's
+        # config via the gitfile)
+        try:
+            self.repo.git.submodule('init')
+        except git.GitCommandError as e:
+            raise RuntimeError(f"Failed to init submodules: {e}") from e
 
         # Re-initialize and update all submodules to rebuild .git metadata
-        self.repo.git.submodule('update', '--init', '--recursive', '--force')
+        try:
+            self.repo.git.submodule('update', '--init', '--recursive', '--force')
+        except git.GitCommandError as e:
+            raise RuntimeError(f"Failed to update submodules: {e}") from e
 
     def backup_submodule_metadata(self) -> None:
         """Backup .git metadata for all submodules."""

@@ -9,53 +9,10 @@ from git import Repo
 from yagso.infrastructure.git_ops import GitOperations
 from yagso.cli.controller import CLIController
 from yagso.infrastructure.manifest_manager import ManifestManager
+from tests.common import BaseGitTest
 
 
-class TestCli(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        """Set up test repository state once for all tests."""
-        cls.test_root = Path('tests/sample1/yagso_test_root')
-
-    def setUp(self):
-        """Reset test repository to clean state before each test."""
-        git_ops = GitOperations(Path('tests/sample1/yagso_test_root'))
-
-        try:
-            submodule_path = self.test_root / 'libs/addedsub'
-            if submodule_path.exists():
-                # Remove any adding submodule that may have been added in a previous test
-                block0 = {
-                    "name": 'testaddedsub',
-                    "path": 'libs/addedsub'
-                }
-                git_ops.remove_submodule(block0, True)
-        except Exception:
-            pass
-
-        try:
-            submodule_path = self.test_root / 'lib2/lib3'
-            if submodule_path.exists():
-                block1 = {
-                    "name": 'innerLib3Test',
-                    "path": 'lib2/lib3'
-                }
-                git_ops.remove_submodule(block1, True)
-        except Exception:
-            pass
-
-        repo = Repo(self.test_root)
-
-        # Reset main repository
-        repo.git.reset('--hard', 'HEAD')
-
-        # Reset all submodules recursively
-        repo.git.submodule('foreach', '--recursive', 'git reset --hard HEAD')
-
-        # Rebuild .git from .gitmodules
-        # repo.git.submodule('deinit', '--all', '-f')
-        # repo.git.submodule('init')
-        # repo.git.submodule('update', '--init', '--recursive')
+class TestCli(BaseGitTest):
 
     def test_controller_creation(self):
         """Test that CLIController can be created."""
