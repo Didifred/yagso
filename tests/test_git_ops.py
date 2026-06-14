@@ -16,7 +16,7 @@ class TestGitOps(BaseGitTest):
     @unittest.skip("Utility method test, not a real test case")
     def test_rebuild_submodule_metadata(self):
 
-        with GitOperations(self.test_root) as git_ops:
+        with GitOperations(Path.cwd()) as git_ops:
             try:
                 git_ops.rebuild_submodule_metadata()
             except Exception as e:
@@ -24,7 +24,7 @@ class TestGitOps(BaseGitTest):
 
     @unittest.skip("Utility method test, not a real test case")
     def test_backup_restore_submodule_metadata(self):
-        with GitOperations(self.test_root) as git_ops:
+        with GitOperations(Path.cwd()) as git_ops:
             try:
                 git_ops.backup_submodule_metadata()
 
@@ -43,7 +43,7 @@ class TestGitOps(BaseGitTest):
             commit='HEAD'
         )
 
-        with GitOperations(self.test_root) as git_ops:
+        with GitOperations(Path.cwd()) as git_ops:
             try:
                 git_ops.add_submodule(sub_def)
 
@@ -76,7 +76,7 @@ class TestGitOps(BaseGitTest):
             commit='HEAD'
         )
 
-        with GitOperations(self.test_root) as git_ops:
+        with GitOperations(Path.cwd()) as git_ops:
             try:
                 git_ops.add_submodule(sub_def)
             except Exception as e:

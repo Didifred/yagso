@@ -179,19 +179,14 @@ YAGSO (Yet Another Git Submodule Orchestrator) is a CLI tool for managing Git su
 yagso/
 ├── cli/
 │   ├── __init__.py
+│   ├── __main__.py  
 │   ├── controller.py
 │   ├── parser.py
 │   └── formatter.py
 ├── core/
 │   ├── __init__.py
 │   ├── orchestrator.py
-│   └── handlers/
-│       ├── __init__.py
-│       ├── generate.py
-│       ├── update.py
-│       ├── configure.py
-│       ├── commit.py
-│       └── push.py
+│   └── handlers.py
 ├── domain/
 │   ├── __init__.py
 │   ├── manifest.py
