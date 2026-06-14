@@ -4,11 +4,13 @@ Provides a single `setUpClass` and `setUp` that prepare and reset the
 sample repository used across tests. Tests that need this behaviour should
 inherit from `BaseGitTest`.
 """
+import unittest
+import gc
 from pathlib import Path
 from yagso.infrastructure.git_ops import GitOperations
 from git import Repo
-import gc
-import unittest
+import os
+import shutil
 
 
 class BaseGitTest(unittest.TestCase):
@@ -24,19 +26,15 @@ class BaseGitTest(unittest.TestCase):
 
     def setUp(self):
         """Reset test repository to clean state before each test.
-
-        Removes any artifacts left by previous tests (added submodules),
-        restores backed-up submodule metadata and resets the working tree
-        in the main repository and all submodules.
         """
-        # Reset main repository and all submodules recursively
-        # repo = Repo(self.test_root)
-        # repo.git.reset('--hard', 'HEAD')
-        # repo.git.submodule('foreach', '--recursive', 'git reset --hard HEAD')
-
-        # Rebuild and backup submodule metadata to ensure we have a clean state to reset to in tests
 
         with GitOperations(self.test_root) as git_ops:
+            try:
+                git_ops.repo.git.reset('--hard', 'HEAD')
+                git_ops.repo.git.clean('-ffd')
+            except Exception as e:
+                raise RuntimeError(f"Failed to reset repository state: {e}") from e
+
             try:
                 git_ops.rebuild_submodule_metadata()
             except Exception as e:
@@ -47,10 +45,25 @@ class BaseGitTest(unittest.TestCase):
             except Exception as e:
                 raise RuntimeError(f"Failed to backup submodule metadata: {e}") from e
 
-        # Reset main repository and all submodules recursively
-        # repo = Repo(self.test_root)
-        # repo.git.reset('--hard', 'HEAD')
-        # repo.git.submodule('foreach', '--recursive', 'git reset --hard HEAD')
-
     def tearDown(self):
         gc.collect()   # forces release of lingering file handles on Windows
+
+    # Reset main repository and all submodules recursively
+    #    with Repo(self.test_root) as repo:
+    #        try:
+    #            # 1. Deinit ALL submodules first → cleans .git/config entries
+    #            repo.git.submodule('deinit', '--all', '-f')
+    #
+    #            # 2. Wipe .git/modules entirely → removes all cached submodule git data
+    #            modules_path = os.path.join(repo.git_dir, 'modules')
+    #            if os.path.exists(modules_path):
+    #                shutil.rmtree(modules_path)
+
+        # 3. Reset + clean working tree
+    #            repo.git.reset('--hard', 'HEAD')
+    #            repo.git.clean('-ffd')
+
+        # 4. Reinitialize from .gitmodules (now clean state)
+    #            repo.git.submodule('update', '--init', '--recursive', '--force')
+    #        except Exception as e:
+    #            raise RuntimeError(f"Failed to reset repository state: {e}") from e

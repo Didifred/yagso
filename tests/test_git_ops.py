@@ -60,7 +60,7 @@ class TestGitOps(BaseGitTest):
 
             if found:
                 try:
-                    git_ops.remove_submodule(block, False)
+                    git_ops.remove_submodule(block)
                 except Exception as e:
                     self.fail(f"remove_submodule raised an exception: {e}")
             else:
