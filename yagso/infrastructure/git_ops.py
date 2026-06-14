@@ -4,7 +4,6 @@ import re
 import stat
 import git
 import shutil
-import logging
 from pathlib import Path
 from collections import OrderedDict
 from typing import Dict, List, Any, Optional
@@ -16,11 +15,8 @@ from ..domain.submodule import SubmoduleDefinition
 
 def _remove_readonly(func, path, exc_info):
     """Reset read-only bits and retry filesystem removals."""
-    if not os.access(path, os.W_OK):
-        os.chmod(path, stat.S_IWRITE)
-        func(path)
-    else:
-        raise
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 
 # Workaround: During Python interpreter shutdown on Windows, GitPython's
@@ -127,13 +123,49 @@ class GitOperations:
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        # Ensure repository is closed when exiting context manager.
+        # Use the shared `close()` helper for idempotent, safe shutdown.
         try:
-            self._repo.close()
+            self.close()
         except Exception:
+            # Swallow exceptions in __exit__ to avoid masking original errors.
             pass
 
+    def close(self) -> None:
+        """Close the GitPython Repo if opened.
+
+        This is idempotent and swallows all exceptions because it may be
+        invoked during interpreter shutdown where module-level state can be
+        partially turn down.
+        """
+        repo = getattr(self, '_repo', None)
+        if repo is None:
+            return
+        try:
+            repo.close()
+        except Exception:
+            # Avoid raising from destructor/cleanup paths.
+            pass
+        finally:
+            # Clear reference to allow GC and avoid double-close.
+            try:
+                self._repo = None
+            except Exception:
+                pass
+
     def __del__(self):
-        self._repo.close()
+        # Do a minimal, defensive close here. Avoid calling other methods
+        # that may depend on module-level globals during interpreter shutdown.
+        repo = getattr(self, '_repo', None)
+        if repo is not None:
+            try:
+                repo.close()
+            except Exception:
+                pass
+            try:
+                self._repo = None
+            except Exception:
+                pass
 
     def get_recorded_commit(self, path: str) -> Optional[str]:
         """Return the gitlink commit SHA for `path` recorded in `HEAD`.
@@ -462,7 +494,7 @@ class GitOperations:
         except Exception as e:
             raise RuntimeError(f"Failed to stage submodule path {path}: {e}") from e
 
-    def remove_submodule(self, block: Dict[str, Any], cleanup: bool) -> None:
+    def remove_submodule(self, block: Dict[str, Any]) -> None:
         """Remove a submodule described by a parsed .gitmodules block.
 
         When a submodule matching the supplied `name` or `path` is
@@ -493,6 +525,8 @@ class GitOperations:
             submodule_git_dir = self._get_submodule_git_dir(submodule)
 
             submodule.remove(force=False, module=True)
+            # TODO: GitPython does not always clean up .git/modules for submodules, especially in older versions.
+            # We may need to manually remove the submodule's git dir if it still exists.
         except Exception as e:
             # TODO find the submodule git dir ... to cleanup .git/modules
             raise RuntimeError(f"Failed to remove submodule {name} at {path}: {e}") from e
@@ -559,7 +593,7 @@ class GitOperations:
         submodule_folders.sort(key=lambda p: len(p.parts))
         for folder in submodule_folders:
             if folder.exists() and folder != self.repo_path:
-                shutil.rmtree(folder)
+                shutil.rmtree(folder, onerror=_remove_readonly)
 
         # Init: registers submodules in .git/config (writes into main repo's
         # config via the gitfile)

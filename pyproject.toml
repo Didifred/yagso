@@ -9,7 +9,12 @@ description = "A Python CLI utility"
 authors = [{name = "didifred", email = "didifred.web@gmail.com"}]
 dependencies = [
     "gitpython>=3.1.0",
-    "pyyaml>=6.0"
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "coverage"
 ]
 
 [tool.setuptools.packages.find]

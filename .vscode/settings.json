@@ -18,5 +18,9 @@
     "[python]": {
         "editor.defaultFormatter": "ms-python.autopep8"
     },
-    "python.defaultInterpreterPath": "./.venv/Scripts/python.exe"
+    "python.defaultInterpreterPath": "./.venv/Scripts/python.exe",
+    "files.watcherExclude": {
+        "**/tests/**/yagso_test_root/**": true,
+        "**/.git/modules/**": true
+    }
 }
