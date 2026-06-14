@@ -36,20 +36,20 @@ class TestCli(BaseGitTest):
         """Test that generate command works."""
         controller = CLIController()
 
-        result = controller.run(['generate', '--root-path', 'tests/sample1/yagso_test_root'])
+        result = controller.run(['generate'])
         self.assertEqual(result, 0)
 
     def test_configure_command(self):
         """Test that configure command works (identity)."""
         controller = CLIController()
 
-        result = controller.run(['configure', '--root-path', 'tests/sample1/yagso_test_root'])
+        result = controller.run(['configure'])
         self.assertEqual(result, 0)
 
     def test_configure_command_commit_change(self):
         """Test that configure command works with commit change to develop/YAGSO."""
         # Modify yagso.yaml to change lib3/bis commit to develop/YAGSO
-        pathYaml = Path('tests/sample1/yagso_test_root/yagso.yaml')
+        pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
         manifest = manager.load_manifest(pathYaml)
         new_manifest = copy.deepcopy(manifest)
@@ -61,7 +61,7 @@ class TestCli(BaseGitTest):
         try:
             controller = CLIController()
 
-            result = controller.run(['configure', '--root-path', 'tests/sample1/yagso_test_root'])
+            result = controller.run(['configure'])
             self.assertEqual(result, 0)
         finally:
             manager.save_manifest(manifest, pathYaml)
@@ -69,7 +69,7 @@ class TestCli(BaseGitTest):
     def test_configure_command_name_change(self):
         """Test that configure command works with name change to innerLib3Test.\n"""
         # Modify yagso.yaml to change name of lib2/lib3 repo to innerLib3Test
-        pathYaml = Path('tests/sample1/yagso_test_root/yagso.yaml')
+        pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
         manifest = manager.load_manifest(pathYaml)
         new_manifest = copy.deepcopy(manifest)
@@ -81,7 +81,7 @@ class TestCli(BaseGitTest):
         try:
             controller = CLIController()
 
-            result = controller.run(['configure', '--root-path', 'tests/sample1/yagso_test_root'])
+            result = controller.run(['configure'])
             self.assertEqual(result, 0)
 
         finally:
@@ -90,7 +90,7 @@ class TestCli(BaseGitTest):
     def test_configure_command_url_change(self):
         """Test that configure command works with url change to ssh"""
         # Modify yagso.yaml to change lib1 url to ssh
-        pathYaml = Path('tests/sample1/yagso_test_root/yagso.yaml')
+        pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
         manifest = manager.load_manifest(pathYaml)
         new_manifest = copy.deepcopy(manifest)
@@ -106,7 +106,7 @@ class TestCli(BaseGitTest):
         try:
             controller = CLIController()
 
-            result = controller.run(['configure', '--root-path', 'tests/sample1/yagso_test_root'])
+            result = controller.run(['configure'])
             self.assertEqual(result, 0)
 
         finally:

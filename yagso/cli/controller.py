@@ -39,8 +39,6 @@ class CLIController:
 
             # Determine repository path
             repo_path = Path.cwd()
-            if options.get("root_path"):
-                repo_path = Path(options["root_path"])
 
             # Check if it's a git repository
             if not (repo_path / ".git").exists():

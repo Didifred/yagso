@@ -23,10 +23,6 @@ class ArgumentParser:
             "generate",
             help="Generate yagso.yaml manifest from repository structure"
         )
-        generate_parser.add_argument(
-            "--root-path",
-            help="Root path of the Git repository (default: current directory)"
-        )
 
         # update command
         update_parser = subparsers.add_parser(
@@ -48,10 +44,6 @@ class ArgumentParser:
         configure_parser = subparsers.add_parser(
             "configure",
             help="Apply manifest configuration to repository"
-        )
-        configure_parser.add_argument(
-            "--root-path",
-            help="Root path of the Git repository (default: current directory)"
         )
 
         # commit command
@@ -91,15 +83,7 @@ class ArgumentParser:
         }
 
         # Add command-specific options
-        if parsed.command == "generate":
-            if hasattr(parsed, "root_path") and parsed.root_path:
-                options["root_path"] = parsed.root_path
-
-        elif parsed.command == "configure":
-            if hasattr(parsed, "root_path") and parsed.root_path:
-                options["root_path"] = parsed.root_path
-
-        elif parsed.command == "update":
+        if parsed.command == "update":
             options["init"] = getattr(parsed, "init", False)
             options["remote"] = getattr(parsed, "remote", False)
 

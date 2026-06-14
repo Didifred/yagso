@@ -58,13 +58,13 @@ yagso is a tool for managing Git submodules with a manifest-based approach.
 
 - **`yagso generate`**: Generates the hierarchy of submodules from a Git root repository and produces a manifest file called `yagso.yaml` at the root of the Git repository.
 
-- **`yagso update --init`**: After initial cloning of the root repository, clones all submodules recursively.
+- **`yagso configure`**: Applies the manifest configuration to the repository.
 
 - **`yagso update`**: Updates the submodules without initializing new ones.
 
-- **`yagso update --init --remote`**: Updates submodules to the latest commit on their tracking branch.
+- **`yagso update --init`**: After initial cloning of the root repository, clones all submodules recursively.
 
-- **`yagso configure`**: Applies the manifest configuration to the repository.
+- **`yagso update --init --remote`**: Updates submodules to the latest commit on their tracking branch.
 
 - **`yagso commit`**: Commits changes recursively, including `.gitmodules`, index changes, and the manifest file itself.
 
