@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import sys
+import scripts.run_tests_with_watcher_toggle as watcher_toggle
 
 
 class BaseGitTest(unittest.TestCase):
@@ -23,23 +24,27 @@ class BaseGitTest(unittest.TestCase):
         cls._test_root = Path('tests/sample1/yagso_test_root')
         # Save original working directory
         cls._orig_cwd = Path.cwd()
+
         # Ensure VS Code watcher excludes are enabled for tests
-        try:
-            subprocess.run([sys.executable, str(
-                'scripts/run_tests_with_watcher_toggle.py'), 'add'], check=True)
-        except Exception as e:
-            raise RuntimeError(f"Failed to enable watcher excludes: {e}") from e
+        watcher_toggle.add_watcherExclude()
+        # Ensure VS Code watcher excludes are enabled for tests
+        # try:
+        #    subprocess.run([sys.executable, str(
+        #        'scripts/run_tests_with_watcher_toggle.py'), 'add'], check=True)
+        # except Exception as e:
+        #    raise RuntimeError(f"Failed to enable watcher excludes: {e}") from e
 
     @classmethod
     def tearDownClass(cls):
         """Clean up test repository state after all tests have run.
         """
         # Restore VS Code watcher excludes to original state
-        try:
-            subprocess.run([sys.executable, str(
-                'scripts/run_tests_with_watcher_toggle.py'), 'remove'], check=True)
-        except Exception as e:
-            raise RuntimeError(f"Failed to restore watcher excludes: {e}") from e
+        watcher_toggle.remove_watcherExclude()
+        # try:
+        #    subprocess.run([sys.executable, str(
+        #        'scripts/run_tests_with_watcher_toggle.py'), 'remove'], check=True)
+        # except Exception as e:
+        #    raise RuntimeError(f"Failed to restore watcher excludes: {e}") from e
 
     def setUp(self):
         """Reset test repository to clean state before each test.

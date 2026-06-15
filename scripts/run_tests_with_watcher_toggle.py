@@ -77,12 +77,7 @@ def remove_keys(settings: Dict[str, Any], keys: Iterable[str]) -> Dict[str, Any]
     return removed
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Add or remove watcher-exclude keys in VS Code settings.")
-    parser.add_argument("action", choices=("add", "remove"), help="Action to perform")
-    args = parser.parse_args()
-
+def add_watcherExclude():
     settings_path = find_settings_path()
     if not settings_path or not settings_path.exists():
         print("No .vscode/settings.json found. Exiting.")
@@ -94,24 +89,13 @@ def main() -> None:
         print(f"Failed to load {settings_path}: {e}")
         sys.exit(1)
 
-    if args.action == "add":
-        changed = add_keys(settings, KEYS)
-        if not changed:
-            print("No changes needed; keys already set to true.")
-        else:
-            print("Will set the following keys to true:")
-            for k, prev in changed.items():
-                print(f"  {k}: was {prev}")
+    changed = add_keys(settings, KEYS)
+    if not changed:
+        print("No changes needed; keys already set to true.")
     else:
-        removed = remove_keys(settings, KEYS)
-        if not removed:
-            print("No keys removed; none were present.")
-        else:
-            print("Will remove the following keys:")
-            for k, prev in removed.items():
-                print(f"  {k}: was {prev}")
-
-    # Note: --dry-run removed; script always writes changes.
+        print("Will set the following keys to true:")
+        for k, prev in changed.items():
+            print(f"  {k}: was {prev}")
 
     try:
         save_settings(settings_path, settings)
@@ -119,7 +103,48 @@ def main() -> None:
         print(f"Failed to write {settings_path}: {e}")
         sys.exit(1)
 
-    print(f"Updated {settings_path}")
+    print(f"Updated {settings_path} with watcherExclude keys.")
+
+
+def remove_watcherExclude():
+    settings_path = find_settings_path()
+    if not settings_path or not settings_path.exists():
+        print("No .vscode/settings.json found. Exiting.")
+        sys.exit(1)
+
+    try:
+        settings = load_settings(settings_path)
+    except Exception as e:
+        print(f"Failed to load {settings_path}: {e}")
+        sys.exit(1)
+
+    removed = remove_keys(settings, KEYS)
+    if not removed:
+        print("No keys removed; none were present.")
+    else:
+        print("Will remove the following keys:")
+        for k, prev in removed.items():
+            print(f"  {k}: was {prev}")
+
+    try:
+        save_settings(settings_path, settings)
+    except Exception as e:
+        print(f"Failed to write {settings_path}: {e}")
+        sys.exit(1)
+
+    print(f"Updated {settings_path} by removing watcherExclude keys.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Add or remove watcher-exclude keys in VS Code settings.")
+    parser.add_argument("action", choices=("add", "remove"), help="Action to perform")
+    args = parser.parse_args()
+
+    if args.action == "add":
+        add_watcherExclude()
+    elif args.action == "remove":
+        remove_watcherExclude()
 
 
 if __name__ == "__main__":
