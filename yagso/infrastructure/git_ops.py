@@ -525,10 +525,8 @@ class GitOperations:
             submodule_git_dir = self._get_submodule_git_dir(submodule)
 
             submodule.remove(force=False, module=True)
-            # TODO: GitPython does not always clean up .git/modules for submodules, especially in older versions.
-            # We may need to manually remove the submodule's git dir if it still exists.
         except Exception as e:
-            # TODO find the submodule git dir ... to cleanup .git/modules
+            # TODO - .backup files can be proposed to be restored
             raise RuntimeError(f"Failed to remove submodule {name} at {path}: {e}") from e
 
         # Remove any remaining submodule path from the filesystem if it still exists

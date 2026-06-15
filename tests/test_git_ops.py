@@ -32,7 +32,7 @@ class TestGitOps(BaseGitTest):
             except Exception as e:
                 self.fail(f"backup_submodule_metadata raised an exception: {e}")
 
-    def test_remove_submodule(self):
+    def test_add_then_remove_submodule(self):
         # First add a submodule then remove it to test the cleanup logic
 
         sub_def = SubmoduleDefinition(
@@ -65,6 +65,20 @@ class TestGitOps(BaseGitTest):
                     self.fail(f"remove_submodule raised an exception: {e}")
             else:
                 self.fail("Submodule block not found after adding submodule, cannot test remove_submodule")
+
+    def test_remove_submodule(self):
+        # First add a submodule then remove it to test the cleanup logic
+
+        block = {
+            "name": "lib1",
+            "path": "lib1",
+        }
+
+        with GitOperations(Path.cwd()) as git_ops:
+            try:
+                git_ops.remove_submodule(block)
+            except Exception as e:
+                self.fail(f"remove_submodule raised an exception: {e}")
 
     def test_add_submodule(self):
 
