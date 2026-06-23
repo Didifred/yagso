@@ -142,6 +142,36 @@ class TestCli(BaseGitTest):
         finally:
             manager.save_manifest(manifest, pathYaml)
 
+    def test_configure_command_add_submodule_level_1(self):
+        """Test that configure command works with adding a new submodule."""
+        # Modify yagso.yaml to add a new submodule lib4
+        pathYaml = Path('yagso.yaml')
+        manager = ManifestManager()
+        manifest = manager.load_manifest(pathYaml)
+        new_manifest = copy.deepcopy(manifest)
+
+        sub_def = SubmoduleDefinition(
+            root_path='lib2',  # Root path where to insert the submodule
+            name='testaddedsub',
+            path='addedsub',
+            url='https://github.com/Didifred/yagso_test_repo_3.git',
+            commit='HEAD'
+        )
+        manager.add_submodule_definition(new_manifest, sub_def)
+
+        # Write modified manifest back
+        manager.save_manifest(new_manifest, pathYaml)
+
+        try:
+            controller = CLIController()
+
+            result = controller.run(['configure'])
+            self.assertEqual(result, 0)
+
+            # TODO : stage upper level submodules / commit recursive
+        finally:
+            manager.save_manifest(manifest, pathYaml)
+
 
 if __name__ == "__main__":
     unittest.main()
