@@ -865,7 +865,3 @@ class OrderedGitConfigParser(GitConfigParser):
             for key, value in section_dict.items():
                 if key not in self.field_order and key != '__name__':
                     fp.write(f"\t{key} = {value}\n")
-
-            # Blank line between sections (except last)
-            if i < len(all_sections) - 1:
-                fp.write("\n")

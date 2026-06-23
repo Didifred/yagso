@@ -42,6 +42,24 @@ class ManifestManager:
 
         setattr(submodule, field_name, field_value)
 
+    def add_submodule_definition(self, manifest: Manifest, submodule: SubmoduleDefinition) -> None:
+        """Add a new submodule to the manifest.
+
+        Args:
+            manifest (Manifest): The manifest to update
+            submodule (SubmoduleDefinition): The submodule to add
+
+        Raises:
+            ValueError: Submodule with the same root_path already exists
+        """
+        existing_submodule = self._find_submodule_by_root_path(
+            manifest.submodules, submodule.root_path)
+
+        if existing_submodule:
+            existing_submodule.submodules.append(submodule)
+        else:
+            manifest.submodules.append(submodule)
+
     def _find_submodule_by_root_path(self, submodules: List[SubmoduleDefinition],
                                      root_path: str) -> Optional[SubmoduleDefinition]:
         """Recursively find a submodule by its root_path.

@@ -9,6 +9,7 @@ from git import Repo
 from yagso.infrastructure.git_ops import GitOperations
 from yagso.cli.controller import CLIController
 from yagso.infrastructure.manifest_manager import ManifestManager
+from yagso.domain.submodule import SubmoduleDefinition
 from tests.common import BaseGitTest
 
 
@@ -99,6 +100,35 @@ class TestCli(BaseGitTest):
             'lib1',
             'url',
             'git@github.com:Didifred/yagso_test_repo_1.git')
+
+        # Write modified manifest back
+        manager.save_manifest(new_manifest, pathYaml)
+
+        try:
+            controller = CLIController()
+
+            result = controller.run(['configure'])
+            self.assertEqual(result, 0)
+
+        finally:
+            manager.save_manifest(manifest, pathYaml)
+
+    def test_configure_command_add_submodule(self):
+        """Test that configure command works with adding a new submodule."""
+        # Modify yagso.yaml to add a new submodule lib4
+        pathYaml = Path('yagso.yaml')
+        manager = ManifestManager()
+        manifest = manager.load_manifest(pathYaml)
+        new_manifest = copy.deepcopy(manifest)
+
+        sub_def = SubmoduleDefinition(
+            root_path='libs/addedsub',
+            name='testaddedsub',
+            path='libs/addedsub',
+            url='https://github.com/Didifred/yagso_test_repo_3.git',
+            commit='HEAD'
+        )
+        manager.add_submodule_definition(new_manifest, sub_def)
 
         # Write modified manifest back
         manager.save_manifest(new_manifest, pathYaml)
