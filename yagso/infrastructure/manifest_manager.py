@@ -56,6 +56,7 @@ class ManifestManager:
             manifest.submodules, submodule.root_path)
 
         if existing_submodule:
+            submodule.root_path = existing_submodule.root_path + '/' + submodule.path
             existing_submodule.submodules.append(submodule)
         else:
             manifest.submodules.append(submodule)
