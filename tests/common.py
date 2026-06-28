@@ -42,8 +42,11 @@ class BaseGitTest(unittest.TestCase):
 
         with GitOperations(self._test_root) as git_ops:
             try:
-                git_ops.repo.git.reset('--hard', 'HEAD')
+                # Reset the repository to a clean state (from origin/HEAD)
+                # to ensure tests run in a consistent environment
+                git_ops.repo.git.reset('--hard', 'origin/HEAD')
                 git_ops.repo.git.clean('-ffd')
+                # TODO : reset submodules to their original state as well
             except Exception as e:
                 raise RuntimeError(f"Failed to reset repository state: {e}") from e
 

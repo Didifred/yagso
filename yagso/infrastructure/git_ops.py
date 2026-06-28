@@ -755,35 +755,36 @@ class GitOperations:
         for submodule in self.repo.submodules:
             self.update_submodule(submodule.path, options)
 
+    def _commit_recursive(self, repo: git.Repo, message: str) -> None:
+        """Post-order DFS: commit deepest submodules before their parents."""
+        for submodule in repo.submodules:
+            if not submodule.module_exists():
+                continue
+
+            submodule_repo = submodule.module()
+
+            # Recurse into this submodule's own submodules first
+            self._commit_recursive(submodule_repo, message)
+
+            # Stage everything — including any gitlink update produced by the submodule commit
+            submodule_repo.git.add(all=True)
+
+            # Commit only if something actually changed (file edits OR gitlink bump)
+            if submodule_repo.is_dirty() or submodule_repo.untracked_files:
+                submodule_repo.index.commit(f"Update {submodule.name}: {message}")
+
     def commit_all(self, message: str) -> None:
         """Commit all changes recursively, deepest submodules first."""
         try:
-            pending_submodules = []
-            for submodule in self.repo.submodules:
-                if not submodule.module_exists():
-                    continue
+            # Walk the whole submodule tree bottom-up
+            self._commit_recursive(self.repo, message)
 
-                submodule_repo = submodule.module()
-                if submodule_repo.is_dirty() or submodule_repo.untracked_files:
-                    pending_submodules.append(
-                        (len(Path(submodule.path).parts), submodule, submodule_repo))
-
-            for _, submodule, submodule_repo in sorted(
-                pending_submodules,
-                key=lambda item: item[0],
-                reverse=True,
-            ):
-                submodule_repo.git.add(all=True)
-                submodule_repo.index.commit(f"Update {submodule.name}: {message}")
-
-            # Stage and commit the main repository last so the submodule gitlinks
-            # are included once the nested submodule commits have been recorded.
+            # Stage the top-level repo last (picks up all gitlink updates)
             self.repo.git.add(all=True)
             if self.repo.is_dirty() or self.repo.untracked_files:
                 self.repo.index.commit(message)
             else:
                 raise ValueError("No changes to commit")
-
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to commit changes: {e}") from e
 
