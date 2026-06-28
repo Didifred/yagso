@@ -52,7 +52,7 @@ class ArgumentParser:
             help="Commit changes recursively"
         )
         commit_parser.add_argument(
-            "message",
+            "--message",
             help="Commit message"
         )
 

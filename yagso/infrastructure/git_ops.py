@@ -756,24 +756,33 @@ class GitOperations:
             self.update_submodule(submodule.path, options)
 
     def commit_all(self, message: str) -> None:
-        """Commit all changes recursively."""
+        """Commit all changes recursively, deepest submodules first."""
         try:
-            # Add all changes in main repo
-            self.repo.git.add(all=True)
+            pending_submodules = []
+            for submodule in self.repo.submodules:
+                if not submodule.module_exists():
+                    continue
 
-            # Commit if there are changes
+                submodule_repo = submodule.module()
+                if submodule_repo.is_dirty() or submodule_repo.untracked_files:
+                    pending_submodules.append(
+                        (len(Path(submodule.path).parts), submodule, submodule_repo))
+
+            for _, submodule, submodule_repo in sorted(
+                pending_submodules,
+                key=lambda item: item[0],
+                reverse=True,
+            ):
+                submodule_repo.git.add(all=True)
+                submodule_repo.index.commit(f"Update {submodule.name}: {message}")
+
+            # Stage and commit the main repository last so the submodule gitlinks
+            # are included once the nested submodule commits have been recorded.
+            self.repo.git.add(all=True)
             if self.repo.is_dirty() or self.repo.untracked_files:
                 self.repo.index.commit(message)
             else:
                 raise ValueError("No changes to commit")
-
-            # Also commit in submodules if they have changes
-            for submodule in self.repo.submodules:
-                if submodule.module_exists():
-                    submodule_repo = submodule.module()
-                    if submodule_repo.is_dirty() or submodule_repo.untracked_files:
-                        submodule_repo.git.add(all=True)
-                        submodule_repo.index.commit(f"Update {submodule.name}: {message}")
 
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to commit changes: {e}") from e
