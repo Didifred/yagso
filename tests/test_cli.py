@@ -196,6 +196,9 @@ class TestCli(BaseGitTest):
         try:
             controller = CLIController()
 
+            result = controller.run(['configure'])
+            self.assertEqual(result, 0)
+
             result = controller.run(['commit', '--message', 'Test commit from CLI'])
             self.assertEqual(result, 0)
         finally:
