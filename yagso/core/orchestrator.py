@@ -121,6 +121,18 @@ class SubmoduleOrchestrator:
         # Sync submodules with manifest configuration (e.g., .gitmodules, .git/config)
         self._sync_submodules(root_path, manifest)
 
+    def commit_changes(self, message: str, root_path: Optional[Path] = None) -> None:
+        """Commit all changes recursively."""
+
+        if root_path is None:
+            root_path = self.repo_path
+
+        if not message:
+            raise ValueError("Commit message is required")
+
+        with GitOperations(root_path) as git_ops:
+            git_ops.commit_all(message)
+
     def _sync_submodules(self, root_path, manifest: Manifest) -> None:
         """Sync submodules with manifest. """
 
@@ -200,13 +212,6 @@ class SubmoduleOrchestrator:
 
         # Otherwise, it's considerated as an added submodule
         return SearchResult(DiffStatus.ADDED, submodule.name)
-
-    def commit_changes(self, message: str) -> None:
-        """Commit all changes recursively."""
-        if not message:
-            raise ValueError("Commit message is required")
-
-        # self.git_ops.commit_all(message)
 
     def push_changes(self) -> None:
         """Push all commits to remote."""

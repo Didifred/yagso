@@ -24,9 +24,7 @@ class GenerateHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         formatter = OutputFormatter()
-
-        root_path = options.get("root_path")
-        root_path = Path(root_path) if root_path else Path.cwd()
+        root_path = Path.cwd()
 
         manifest = self.orchestrator.generate_manifest(root_path)
         formatter.success(f"Generated manifest with {len(manifest.submodules)} submodules")
@@ -49,9 +47,7 @@ class ConfigureHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         formatter = OutputFormatter()
-
-        root_path = options.get("root_path")
-        root_path = Path(root_path) if root_path else Path.cwd()
+        root_path = Path.cwd()
 
         self.orchestrator.configure_repository(root_path)
         formatter.success("Repository configured according to manifest")
@@ -62,12 +58,13 @@ class CommitHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         formatter = OutputFormatter()
+        root_path = Path.cwd()
 
         message = options.get("message", "")
         if not message:
             raise ValueError("Commit message is required")
 
-        self.orchestrator.commit_changes(message)
+        self.orchestrator.commit_changes(message, root_path)
         formatter.success(f"Committed changes: {message}")
 
 
