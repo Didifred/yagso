@@ -658,17 +658,6 @@ class GitOperations:
             raise RuntimeError(
                 f"Failed to restore config file from {backup_config_path} to {config_path}: {e}") from e
 
-    def _get_submodule_git_dir(self, submodule: Submodule) -> Path:
-        """Return the git directory path. (.git folder)"""
-        module_repo = submodule.module()
-        git_dir = Path(module_repo.git_dir)
-
-        if not git_dir.is_absolute():
-            worktree_path = self.repo_path / submodule.path
-            git_dir = (worktree_path / git_dir).resolve()
-
-        return git_dir
-
     def move_submodule(self, name: str, new_path: str) -> None:
         """Move a submodule to a new path using `git mv` and update .gitmodules.
 
@@ -755,24 +744,6 @@ class GitOperations:
         for submodule in self.repo.submodules:
             self.update_submodule(submodule.path, options)
 
-    def _commit_recursive(self, repo: git.Repo, message: str) -> None:
-        """Post-order DFS: commit deepest submodules before their parents."""
-        for submodule in repo.submodules:
-            if not submodule.module_exists():
-                continue
-
-            submodule_repo = submodule.module()
-
-            # Recurse into this submodule's own submodules first
-            self._commit_recursive(submodule_repo, message)
-
-            # Stage everything — including any gitlink update produced by the submodule commit
-            submodule_repo.git.add(all=True)
-
-            # Commit only if something actually changed (file edits OR gitlink bump)
-            if submodule_repo.is_dirty() or submodule_repo.untracked_files:
-                submodule_repo.index.commit(f"Update {submodule.name}: {message}")
-
     def commit_all(self, message: str) -> None:
         """Commit all changes recursively, deepest submodules first."""
         try:
@@ -780,8 +751,9 @@ class GitOperations:
             self._commit_recursive(self.repo, message)
 
             # Stage the top-level repo last (picks up all gitlink updates)
-            self.repo.git.add(all=True)
-            if self.repo.is_dirty() or self.repo.untracked_files:
+            self.repo.git.add(update=True)
+            if self.repo.is_dirty():
+                self._checkout_ref_or_commit(self.repo)
                 self.repo.index.commit(message)
             else:
                 raise ValueError("No changes to commit")
@@ -819,6 +791,55 @@ class GitOperations:
             "modified_files": [item.a_path for item in self.repo.index.diff(None)],
             "staged_files": [item.a_path for item in self.repo.index.diff("HEAD")],
         }
+
+    def _get_submodule_git_dir(self, submodule: Submodule) -> Path:
+        """Return the git directory path. (.git folder)"""
+        module_repo = submodule.module()
+        git_dir = Path(module_repo.git_dir)
+
+        if not git_dir.is_absolute():
+            worktree_path = self.repo_path / submodule.path
+            git_dir = (worktree_path / git_dir).resolve()
+
+        return git_dir
+
+    def _commit_recursive(self, repo: git.Repo, message: str) -> None:
+        """Post-order DFS: commit deepest submodules before their parents."""
+        for submodule in repo.submodules:
+            if not submodule.module_exists():
+                continue
+
+            submodule_repo = submodule.module()
+
+            # Recurse into this submodule's own submodules first
+            self._commit_recursive(submodule_repo, message)
+
+            # Stage tracked files — including any gitlink update produced by the submodule commi
+            submodule_repo.git.add(update=True)
+
+            # Commit only if something actually changed (file edits OR gitlink bump)
+            if submodule_repo.is_dirty():
+                self._checkout_ref_or_commit(submodule_repo)
+                submodule_repo.index.commit(f"Update {submodule.name}: {message}")
+
+    def _checkout_ref_or_commit(self, repo: git.Repo) -> None:
+        """Attach HEAD to a branch if one points to the current commit, else explicit checkout."""
+        current_commit = repo.head.commit
+
+        if not repo.head.is_detached:
+            return  # Already on a branch, nothing to do
+
+        all_refs = repo.branches + [
+            r for r in repo.references
+            if isinstance(r, git.RemoteReference) and r.commit == current_commit
+        ]
+
+        matching_branch = next((r for r in all_refs if r.commit == current_commit), None)
+
+        if matching_branch:
+            matching_branch.checkout()
+        else:
+            repo.git.checkout(current_commit.hexsha)
 
 
 class OrderedGitConfigParser(GitConfigParser):
