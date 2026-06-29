@@ -46,7 +46,10 @@ class BaseGitTest(unittest.TestCase):
                 # to ensure tests run in a consistent environment
                 git_ops.repo.git.reset('--hard', 'origin/HEAD')
                 git_ops.repo.git.clean('-ffd')
-                # TODO : reset submodules to their original state as well
+
+                # Propagate into all submodules recursively
+                git_ops.repo.git.submodule('foreach', '--recursive', 'git reset --hard origin/HEAD')
+                git_ops.repo.git.submodule('foreach', '--recursive', 'git clean -ffd')
             except Exception as e:
                 raise RuntimeError(f"Failed to reset repository state: {e}") from e
 
