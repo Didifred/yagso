@@ -96,6 +96,34 @@ class TestGitOps(BaseGitTest):
             except Exception as e:
                 self.fail(f"add_submodule raised an exception: {e}")
 
+    def test_get_refs_containing_commit_at_path_filters_local_branch_aligned_with_remote(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            repo_path = Path(tmp_dir) / 'repo'
+            remote_path = Path(tmp_dir) / 'remote.git'
+
+            git.Repo.init(remote_path, bare=True)
+            repo = git.Repo.init(repo_path)
+            try:
+                repo.config_writer().set_value('user', 'name', 'Test User').release()
+                repo.config_writer().set_value('user', 'email', 'test@example.com').release()
+                repo.create_remote('origin', remote_path.as_posix())
+
+                (repo_path / 'README.md').write_text('hello\n', encoding='utf-8')
+                repo.index.add(['README.md'])
+                commit = repo.index.commit('initial commit')
+
+                repo.git.checkout('-b', 'feature')
+                repo.git.push('origin', 'feature')
+                repo.git.fetch('origin', 'feature:refs/remotes/origin/feature')
+
+                with GitOperations(repo_path) as git_ops:
+                    refs = git_ops.get_refs_containing_commit_at_path(repo_path, commit.hexsha)
+
+                self.assertIn('origin/feature', refs)
+                self.assertNotIn('feature', refs)
+            finally:
+                repo.close()
+
 
 if __name__ == '__main__':
     unittest.main()

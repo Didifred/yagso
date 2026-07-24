@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import git
 from pathlib import Path
 from typing import Dict, Any, Iterable
 
@@ -124,3 +125,21 @@ class WatcherToggle:
             print(f"Failed to write {settings_path}: {e}")
 
         print(f"Updated {settings_path} by removing watcherExclude keys.")
+
+    def refresh_all_scm(self, path: Path) -> None:
+
+        repo = git.Repo(path)
+
+        """Refresh VS Code SCM for root repo and all submodules."""
+        self._refresh_scm(repo)
+
+    def _refresh_scm(self, repo: git.Repo) -> None:
+        """Refresh VS Code SCM for root repo and all submodules."""
+        for sm in repo.submodules:
+            self._refresh_scm(sm.module())
+
+        try:
+            repo.git.update_index("--refresh")
+            print(f"[SCM] refreshed → {repo.working_dir}")
+        except git.exc.GitCommandError:
+            pass

@@ -200,7 +200,7 @@ class GitOperations:
 
         This inspects the repository at `worktree_path` and lists refs that
         directly point at the supplied `commit` (branches, tags and remotes).
-        Symbolic HEAD refs are filtered out.
+        Symbolic HEAD refs and local branches pointing to its remote are filtered out.
 
         Args:
             worktree_path: filesystem path to the repository to inspect.
@@ -216,19 +216,37 @@ class GitOperations:
             return []
 
         try:
-            # Only list refs that point at the exact commit (no "contains").
-            out = sub_repo.git.for_each_ref('--format=%(refname:short)', '--points-at', commit,
-                                            'refs/heads', 'refs/tags', 'refs/remotes')
+            # List heads, tags and remotes that point at the exact commit.
+            heads_out = sub_repo.git.for_each_ref(
+                '--format=%(refname:short)', '--points-at', commit, 'refs/heads')
+            tags_out = sub_repo.git.for_each_ref('--format=%(refname:short)', '--points-at', commit,
+                                                 'refs/tags')
+            remotes_out = sub_repo.git.for_each_ref(
+                '--format=%(refname:short)', '--points-at', commit, 'refs/remotes')
         except git.GitCommandError:
             return []
 
-        if not out:
-            return []
+        local_refs = [r.strip() for r in heads_out.splitlines() if r.strip()]
+        tag_refs = [r.strip() for r in tags_out.splitlines() if r.strip()]
+        remote_refs = [r.strip() for r in remotes_out.splitlines() if r.strip()]
 
-        # Build list and exclude any HEAD refs (local or remote symbolic refs)
-        refs = [r.strip() for r in out.splitlines() if r.strip()]
-        filtered = [r for r in refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
-        return filtered
+        local_refs = [r for r in local_refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
+        tag_refs = [r for r in tag_refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
+        remote_refs = [r for r in remote_refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
+
+        # Local branches are omitted when the same commit is already exposed
+        # through a remote-tracking branch of the same name.
+        remote_names = {remote.name for remote in sub_repo.remotes}
+        matching_remote_names = {
+            ref.split('/', 1)[1]
+            for ref in remote_refs
+            if '/' in ref and ref.split('/', 1)[0] in remote_names
+        }
+        filtered_local_refs = [
+            ref for ref in local_refs if ref not in matching_remote_names
+        ]
+
+        return filtered_local_refs + tag_refs + remote_refs
 
     def get_submodules(self) -> List[Dict[str, Any]]:
         """Return a list of dictionaries describing configured submodules.

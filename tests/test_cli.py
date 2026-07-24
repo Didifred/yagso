@@ -40,6 +40,27 @@ class TestCli(BaseGitTest):
         result = controller.run(['generate'])
         self.assertEqual(result, 0)
 
+    def test_generate_command__local_branches(self):
+
+        # Create some local branches fo test
+        try:
+            # Checkout main
+            submodule_path = Path('lib2/lib3')
+            submodule_repo = Repo(submodule_path)
+            submodule_repo.git.checkout('-b', 'main', 'origin/main')
+
+            # Create a new local branch in a submodule
+            submodule_repo.git.checkout('-b', 'test_submodule_branch')
+        except Exception as e:
+            self.fail(f"Failed to create local branches in submodule: {e}")
+
+        controller = CLIController()
+        result = controller.run(['generate'])
+
+        # Verify that un yaml file is generated and contains the local branch
+        # test_submodule_branch but not the main branch
+        self.assertEqual(result, 0)
+
     def test_configure_command(self):
         """Test that configure command works (identity)."""
         controller = CLIController()

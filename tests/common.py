@@ -36,6 +36,9 @@ class BaseGitTest(unittest.TestCase):
         # Restore VS Code watcher excludes to original state
         cls.wt.remove_watcherExclude()
 
+        # Refresh SCM to ensure any changes made during tests are reflected
+        cls.wt.refresh_all_scm(cls._test_root)
+
     def setUp(self):
         """Reset test repository to clean state before each test.
         """
