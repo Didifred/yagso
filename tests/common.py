@@ -59,6 +59,14 @@ class BaseGitTest(unittest.TestCase):
                 raise RuntimeError(f"Failed to rebuild submodule metadata: {e}") from e
 
             try:
+                git_ops.repo.git.submodule(
+                    'foreach',
+                    '--recursive',
+                    'git branch | grep -v "^\\*" | xargs -r git branch -D || true')
+            except Exception as e:
+                raise RuntimeError(f"Failed to delete all local branches recursively: {e}") from e
+
+            try:
                 git_ops.backup_submodule_metadata()
             except Exception as e:
                 raise RuntimeError(f"Failed to backup submodule metadata: {e}") from e
