@@ -127,19 +127,27 @@ class WatcherToggle:
         print(f"Updated {settings_path} by removing watcherExclude keys.")
 
     def refresh_all_scm(self, path: Path) -> None:
-
-        repo = git.Repo(path)
-
         """Refresh VS Code SCM for root repo and all submodules."""
-        self._refresh_scm(repo)
+        try:
+            repo = git.Repo(path)
+        except (git.InvalidGitRepositoryError, Exception):
+            return
+
+        self._refresh_scm(repo)  # Refresh root repo
 
     def _refresh_scm(self, repo: git.Repo) -> None:
-        """Refresh VS Code SCM for root repo and all submodules."""
+        """Refresh the SCM index for a repository and its submodules."""
+
         for sm in repo.submodules:
-            self._refresh_scm(sm.module())
+            try:
+                self._refresh_scm(sm.module())
+            except Exception as exc:
+                print(f"[SCM] failed to refresh submodule {sm.path}: {exc}")
+                pass
 
         try:
-            repo.git.update_index("--refresh")
+            repo.git.update_index("--refresh", with_exceptions=False)
             print(f"[SCM] refreshed → {repo.working_dir}")
-        except git.exc.GitCommandError:
-            pass
+        except Exception as exc:
+            print(f"[SCM] failed to refresh {repo.working_dir}: {exc}")
+            return
