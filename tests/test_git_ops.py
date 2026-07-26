@@ -96,7 +96,7 @@ class TestGitOps(BaseGitTest):
             except Exception as e:
                 self.fail(f"add_submodule raised an exception: {e}")
 
-    def test_get_refs_containing_commit_at_path_filters_local_branch_aligned_with_remote(self):
+    def test_get_refs_containing_commit_at_path(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             repo_path = Path(tmp_dir) / 'repo'
             remote_path = Path(tmp_dir) / 'remote.git'
@@ -121,6 +121,54 @@ class TestGitOps(BaseGitTest):
 
                 self.assertIn('origin/feature', refs)
                 self.assertNotIn('feature', refs)
+            finally:
+                repo.close()
+
+    def test_checkout_ref_or_commit(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            repo_path = Path(tmp_dir) / 'repo'
+            repo = git.Repo.init(repo_path)
+
+            try:
+                repo.config_writer().set_value('user', 'name', 'Test User').release()
+                repo.config_writer().set_value('user', 'email', 'test@example.com').release()
+
+                (repo_path / 'README.md').write_text('hello\n', encoding='utf-8')
+                repo.index.add(['README.md'])
+                commit = repo.index.commit('initial commit')
+
+                # Detach HEAD by checking out the commit directly
+                repo.git.checkout(commit.hexsha)
+                self.assertTrue(repo.head.is_detached)
+
+                # Call the helper
+                with GitOperations(repo_path) as ops:
+                    ops._checkout_ref_or_commit(repo)
+
+                # After the helper, we should be on branch main
+                self.assertFalse(repo.head.is_detached)
+                # branch_name = f"yagso-{commit.hexsha}"
+                branch_name = f"main"
+                self.assertIn(branch_name, [b.name for b in repo.branches])
+                self.assertEqual(repo.head.commit.hexsha, commit.hexsha)
+
+                (repo_path / 'README.md').write_text('hello again\n', encoding='utf-8')
+                repo.index.add(['README.md'])
+                commit2 = repo.index.commit('second commit')
+                # checkout initial commit to detach HEAD
+                repo.git.checkout(commit.hexsha)
+                self.assertTrue(repo.head.is_detached)
+
+                # Call the helper
+                with GitOperations(repo_path) as ops:
+                    ops._checkout_ref_or_commit(repo)
+
+                # After the helper, we should be on branch yagso-<commit_hash> for the second commit
+                self.assertFalse(repo.head.is_detached)
+                branch_name = f"yagso-{commit.hexsha}"
+                self.assertIn(branch_name, [b.name for b in repo.branches])
+                self.assertEqual(repo.head.commit.hexsha, commit.hexsha)
+
             finally:
                 repo.close()
 
