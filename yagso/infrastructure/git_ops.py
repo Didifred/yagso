@@ -832,7 +832,7 @@ class GitOperations:
             # Recurse into this submodule's own submodules first
             self._commit_recursive(submodule_repo, message)
 
-            # Stage tracked files — including any gitlink update produced by the submodule commi
+            # Stage tracked files — including any gitlink update produced by the submodule commit
             submodule_repo.git.add(update=True)
 
             # Commit only if something actually changed (file edits OR gitlink bump)
@@ -841,13 +841,19 @@ class GitOperations:
                 submodule_repo.index.commit(f"Update {submodule.name}: {message}")
 
     def _checkout_ref_or_commit(self, repo: git.Repo) -> None:
-        """Attach HEAD to a branch if one points to the current commit, else explicit checkout."""
+        """Attach HEAD to a branch if one points to the current commit.
+
+        When HEAD is detached this method searches for an existing local
+        or remote-tracking branch that points at the current commit. If
+        one is found it is checked out. Otherwise create and checkout a branch yagso-#hexsha.
+        """
         current_commit = repo.head.commit
 
         if not repo.head.is_detached:
             return  # Already on a branch, nothing to do
 
-        all_refs = repo.branches + [
+        # Collect local branches and remote references pointing at the commit
+        all_refs: list = list(repo.branches) + [
             r for r in repo.references
             if isinstance(r, git.RemoteReference) and r.commit == current_commit
         ]
@@ -857,7 +863,11 @@ class GitOperations:
         if matching_branch:
             matching_branch.checkout()
         else:
-            repo.git.checkout(current_commit.hexsha)
+            branch_name = f"yagso-{current_commit.hexsha}"
+            try:
+                repo.git.checkout('-b', branch_name, current_commit.hexsha)
+            except Exception as e:
+                raise RuntimeError(f"Failed to c: {e}") from e
 
 
 class OrderedGitConfigParser(GitConfigParser):
