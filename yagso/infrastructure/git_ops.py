@@ -419,6 +419,7 @@ class GitOperations:
                 try:
                     resolved_sha = sub_repo.git.rev_parse(desired_ref)
                 except Exception:
+                    # TODO - search on any remote not only origin
                     # Try on origin if local resolution fails
                     origin_ref = f'origin/{desired_ref}'
                     try:
@@ -768,11 +769,15 @@ class GitOperations:
             # Walk the whole submodule tree bottom-up
             self._commit_recursive(self.repo, message)
 
-            # Stage the top-level repo last (picks up all gitlink updates)
-            self.repo.git.add(update=True)
             if self.repo.is_dirty():
+                # Checkout the main repository to a branch
                 self._checkout_ref_or_commit(self.repo)
-                self.repo.index.commit(message)
+
+                # Stage the top-level repo last (picks up all gitlink updates)
+                self.repo.git.add(update=True)
+
+                # Commit the changes in module
+                self.repo.index.commit(f"Yagso : {message}")
             else:
                 raise ValueError("No changes to commit")
         except git.GitCommandError as e:
@@ -832,13 +837,16 @@ class GitOperations:
             # Recurse into this submodule's own submodules first
             self._commit_recursive(submodule_repo, message)
 
-            # Stage tracked files — including any gitlink update produced by the submodule commit
-            submodule_repo.git.add(update=True)
-
             # Commit only if something actually changed (file edits OR gitlink bump)
             if submodule_repo.is_dirty():
+                # First checkout on a branch
                 self._checkout_ref_or_commit(submodule_repo)
-                submodule_repo.index.commit(f"Update {submodule.name}: {message}")
+
+                # Stage tracked files — including any gitlink update
+                submodule_repo.git.add(update=True)
+
+                # Commit the changes in this submodule
+                submodule_repo.index.commit(f"yagso : {message}")
 
     def _checkout_ref_or_commit(self, repo: git.Repo) -> None:
         """Attach HEAD to a branch if one points to the current commit.
@@ -852,22 +860,35 @@ class GitOperations:
         if not repo.head.is_detached:
             return  # Already on a branch, nothing to do
 
-        # Collect local branches and remote references pointing at the commit
-        all_refs: list = list(repo.branches) + [
-            r for r in repo.references
-            if isinstance(r, git.RemoteReference) and r.commit == current_commit
-        ]
+        matching_branch = None
 
-        matching_branch = next((r for r in all_refs if r.commit == current_commit), None)
+        for b in repo.branches:
+            if b.commit == current_commit:
+                matching_branch = b
+                break
 
-        if matching_branch:
-            matching_branch.checkout()
-        else:
-            branch_name = f"yagso-{current_commit.hexsha}"
-            try:
+        if matching_branch is None:
+            for remote in repo.remotes:
+                for ref in remote.refs:
+                    if ref.commit == current_commit and ref.remote_head != 'HEAD':
+                        matching_branch = ref
+                        break
+                if matching_branch is not None:
+                    break
+
+        try:
+            if matching_branch is not None:
+                branch_name = matching_branch.name
+                if isinstance(matching_branch, git.RemoteReference):
+                    local_branch_name = matching_branch.remote_head
+                    repo.git.checkout('-b', local_branch_name, '--track', branch_name)
+                else:
+                    repo.git.checkout(branch_name)
+            else:
+                branch_name = f"yagso-{current_commit.hexsha[:7]}"
                 repo.git.checkout('-b', branch_name, current_commit.hexsha)
-            except Exception as e:
-                raise RuntimeError(f"Failed to c: {e}") from e
+        except Exception as e:
+            raise RuntimeError(f"Failed to checkout branch {branch_name} : {e}") from e
 
 
 class OrderedGitConfigParser(GitConfigParser):
