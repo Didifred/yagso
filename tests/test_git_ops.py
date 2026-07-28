@@ -164,7 +164,7 @@ class TestGitOps(BaseGitTest):
 
                 # After the helper, we should be on branch yagso-<commit_hash> for the second commit
                 self.assertFalse(repo.head.is_detached)
-                branch_name = f"yagso-{current_commit.hexsha[:7]}"
+                branch_name = f"yagso-{commit.hexsha[:7]}"
                 self.assertIn(branch_name, [b.name for b in repo.branches])
                 self.assertEqual(repo.head.commit.hexsha, commit.hexsha)
 
