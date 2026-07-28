@@ -200,7 +200,8 @@ class GitOperations:
 
         This inspects the repository at `worktree_path` and lists refs that
         directly point at the supplied `commit` (branches, tags and remotes).
-        Symbolic HEAD refs and local branches pointing to its remote are filtered out.
+        Symbolic HEAD refs are filtered out, and remote branches are returned in the form
+        ``<branch>|<remote>`` if a local branch is checkouted.
 
         Args:
             worktree_path: filesystem path to the repository to inspect.
@@ -234,19 +235,25 @@ class GitOperations:
         tag_refs = [r for r in tag_refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
         remote_refs = [r for r in remote_refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
 
-        # Local branches are omitted when the same commit is already exposed
-        # through a remote-tracking branch of the same name.
+        # Local branches when the same commit is already exposed
+        # through a remote branch is indicated <branch>|<remote>.
         remote_names = {remote.name for remote in sub_repo.remotes}
-        matching_remote_names = {
-            ref.split('/', 1)[1]
-            for ref in remote_refs
-            if '/' in ref and ref.split('/', 1)[0] in remote_names
-        }
-        filtered_local_refs = [
-            ref for ref in local_refs if ref not in matching_remote_names
-        ]
+        matching_remote_names = set()
+        local_remote_refs = []
+        for rref in remote_refs:
+            if '/' in rref:
+                remote_prefix, remote_ref = rref.split('/', 1)
+                if remote_prefix in remote_names:
+                    matching_remote_names.add(remote_ref)
 
-        return filtered_local_refs + tag_refs + remote_refs
+                    for lref in local_refs:
+                        if lref == remote_ref:
+                            local_remote_refs.append(lref + '|' + remote_prefix)
+                            remote_refs.remove(rref)
+                            local_refs.remove(lref)
+                            break
+
+        return local_refs + remote_refs + local_remote_refs + tag_refs
 
     def get_submodules(self) -> List[Dict[str, Any]]:
         """Return a list of dictionaries describing configured submodules.
