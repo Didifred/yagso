@@ -63,7 +63,8 @@ class TestCli(BaseGitTest):
         result = controller.run(['generate'])
 
         # Verify that un yaml file is generated and contains the local branch
-        # test_submodule_branch but not the main branch for submodule lib2/lib3
+        # test_submodule_branch and with main branch for submodule lib2/lib3 written main|origin.
+        # Verify that command returns 0
         self.assertEqual(result, 0)
 
     def test_configure_command(self):
@@ -71,6 +72,8 @@ class TestCli(BaseGitTest):
         controller = CLIController()
 
         result = controller.run(['configure'])
+
+        # Verify that yaml file is unchanged and that the command returns 0
         self.assertEqual(result, 0)
 
     def test_configure_command_commit_change(self):
@@ -89,6 +92,8 @@ class TestCli(BaseGitTest):
             controller = CLIController()
 
             result = controller.run(['configure'])
+
+            # Verify that lib3/bis is now at commit develop/YAGSO and that the command returns 0
             self.assertEqual(result, 0)
         finally:
             manager.save_manifest(manifest, pathYaml)
@@ -109,6 +114,8 @@ class TestCli(BaseGitTest):
             controller = CLIController()
 
             result = controller.run(['configure'])
+
+            # Verify that lib2/lib3 is now named innerLib3Test that the command returns 0
             self.assertEqual(result, 0)
 
         finally:
@@ -134,6 +141,8 @@ class TestCli(BaseGitTest):
             controller = CLIController()
 
             result = controller.run(['configure'])
+
+            # Verify that lib1 url change to ssh url and that the command returns 0
             self.assertEqual(result, 0)
 
         finally:
@@ -141,7 +150,7 @@ class TestCli(BaseGitTest):
 
     def test_configure_command_add_submodule(self):
         """Test that configure command works with adding a new submodule."""
-        # Modify yagso.yaml to add a new submodule lib4
+        # Modify yagso.yaml to add a new submodule addedsub
         pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
         manifest = manager.load_manifest(pathYaml)
@@ -163,6 +172,8 @@ class TestCli(BaseGitTest):
             controller = CLIController()
 
             result = controller.run(['configure'])
+
+            # Verify that testaddedsub submodule has been added and that the command returns 0
             self.assertEqual(result, 0)
 
         finally:
@@ -170,7 +181,7 @@ class TestCli(BaseGitTest):
 
     def test_configure_command_add_submodule_level_1(self):
         """Test that configure command works with adding a new submodule."""
-        # Modify yagso.yaml to add a new submodule lib4
+        # Modify yagso.yaml to add a new submodule addedsub under lib2
         pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
         manifest = manager.load_manifest(pathYaml)
@@ -192,6 +203,8 @@ class TestCli(BaseGitTest):
             controller = CLIController()
 
             result = controller.run(['configure'])
+
+            # Verify that testaddedsub submodule has been added and that the command returns 0
             self.assertEqual(result, 0)
 
             # TODO : stage upper level submodules ?
@@ -226,6 +239,9 @@ class TestCli(BaseGitTest):
             self.assertEqual(result, 0)
 
             result = controller.run(['commit', '--message', 'Test commit from CLI'])
+
+            # Verify that testaddedsub submodule has been added and gitlinks comitted
+            # and that the command returns 0
             self.assertEqual(result, 0)
         finally:
             manager.save_manifest(manifest, pathYaml)

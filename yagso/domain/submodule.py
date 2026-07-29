@@ -21,8 +21,7 @@ class SubmoduleDefinition:
 
     def __post_init__(self):
         """Validate the submodule definition after initialization."""
-        if not self.root_path:
-            raise ValueError("Root path of submodule cannot be empty")
+
         if not self.name:
             raise ValueError("Submodule name cannot be empty")
         if not self.path:
@@ -33,9 +32,9 @@ class SubmoduleDefinition:
             raise ValueError("Submodule commit hash cannot be empty")
 
     def to_dict(self) -> dict:
-        """Convert to dictionary representation."""
+        """Convert to dictionary representation for yaml."""
         result = {
-            "root_path": self.root_path,
+            # root_path is not included in the dictionary representation (not in yaml file)
             "name": self.name,
             "path": self.path,
             "url": self.url,
@@ -47,6 +46,7 @@ class SubmoduleDefinition:
             result["ref"] = list(self.ref)
         if self.submodules:
             result["submodules"] = [s.to_dict() for s in self.submodules]
+
         return result
 
     @classmethod
@@ -59,8 +59,9 @@ class SubmoduleDefinition:
                 f"Missing required 'commit' for submodule {
                     data.get(
                         'name', '<unknown>')}")
+
         return cls(
-            root_path=data["root_path"],
+            root_path="",
             name=data["name"],
             path=data["path"],
             url=data["url"],
