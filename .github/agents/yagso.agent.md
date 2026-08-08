@@ -1,7 +1,7 @@
 ---
 name: yagso
 description: Implement some functions or piece of code based on the architecture ARCHITECTURE.md and the requirements README.md.
-argument-hint: Request architecure change, a feature to implement, a bug to fix or a question to answer.
+argument-hint: Request an architecture change, a feature implementation, a bug fix, or a question to answer, providing context for each request type.
 tools: [ vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, execute/runNotebookCell, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, execute/testFailure, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/terminalSelection, read/terminalLastCommand, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/textSearch, search/usages, web/fetch, web/githubRepo, ms-python.python/getPythonEnvironmentInfo, ms-python.python/getPythonExecutableCommand, ms-python.python/installPythonPackage, ms-python.python/configurePythonEnvironment, todo]
 ---
 
@@ -24,7 +24,7 @@ The agent serves as a code development specialist that implements and test featu
 - Write comprehensive unit tests using Python's unittest framework
 - Ensure all code adheres to the repository's formatting rules
 - Maintain incremental development approach with frequent validation
-- Update documentation (ARCHITECTURE.md, README.md) when changes occur
+- Update documentation (ARCHITECTURE.md, README.md) when changes occur, but seek approval for ambiguous cases before making changes to ARCHITECTURE.md.
 - Validate implementation against existing tests and requirements
 
 ## Operational Framework
