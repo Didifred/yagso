@@ -29,7 +29,6 @@ class ManifestManager:
             ValueError: Submodule not found with the specified root_path
             ValueError: Invalid field name for SubmoduleDefinition
 
-
         """
         submodule = self._find_submodule_by_root_path(manifest.submodules, root_path)
 
@@ -41,6 +40,32 @@ class ManifestManager:
                 f"Invalid field name '{field_name}' for SubmoduleDefinition")
 
         setattr(submodule, field_name, field_value)
+
+    def get_submodule_field(self, manifest: Manifest, root_path: str, field_name: str) -> Optional:
+        """Get a specific field of a submodule identified by root_path.
+
+        Args:
+            manifest (Manifest): The manifest to query
+            root_path (str): The root_path of the submodule to query
+            field_name (str): The field name to retrieve (e.g., 'commit', 'url', 'tracking_branch')
+
+        Raises:
+            ValueError: Submodule not found with the specified root_path
+            ValueError: Invalid field name for SubmoduleDefinition
+
+        Returns:
+            The value of the specified field for the submodule
+        """
+        submodule = self._find_submodule_by_root_path(manifest.submodules, root_path)
+
+        if not submodule:
+            raise ValueError(f"Submodule not found with root_path: {root_path}")
+
+        if not hasattr(submodule, field_name):
+            raise ValueError(
+                f"Invalid field name '{field_name}' for SubmoduleDefinition")
+
+        return getattr(submodule, field_name)
 
     def add_submodule_definition(self, manifest: Manifest, submodule: SubmoduleDefinition) -> None:
         """Add a new submodule to the manifest.

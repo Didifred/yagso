@@ -38,6 +38,24 @@ class TestCli(BaseGitTest):
         controller = CLIController()
 
         result = controller.run(['generate'])
+
+        # Verified fields in yagso.yaml are like expected, and that the command returns 0
+        pathYaml = Path('yagso.yaml')
+        manager = ManifestManager()
+
+        manifest = manager.load_manifest(pathYaml)
+
+        commit_value = manager.get_submodule_field(manifest, 'lib1', 'commit')
+        self.assertEqual(commit_value, 'ddb8e804644540502551230b8a9eeb5ffe797abf')
+
+        lib1_refs = manager.get_submodule_field(manifest, 'lib1', 'ref')
+        self.assertEqual(lib1_refs[0], 'origin/main')
+        self.assertEqual(lib1_refs[1], '1.0')
+
+        tracking_branch_value = manager.get_submodule_field(
+            manifest, 'lib2/lib3', 'tracking_branch')
+        self.assertEqual(tracking_branch_value, 'develop/YAGSO')
+
         self.assertEqual(result, 0)
 
     def test_generate_command__local_branches(self):
