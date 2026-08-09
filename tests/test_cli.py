@@ -52,10 +52,22 @@ class TestCli(BaseGitTest):
         self.assertEqual(lib1_refs[1], 'origin/main')
         self.assertEqual(lib1_refs[0], '1.0')
 
+        # Verify that the tracking_branch for lib2/lib3 is develop/YAGSO
         tracking_branch_value = manager.get_submodule_field(
             manifest, 'lib2/lib3', 'tracking_branch')
         self.assertEqual(tracking_branch_value, 'develop/YAGSO')
 
+        # Verify the submodule name for lib2/lib3 is correct
+        name_value = manager.get_submodule_field(manifest, 'lib2/lib3', 'name')
+        self.assertEqual(name_value, 'innerLib3')
+
+        # Verify that lib2 contains an inner submodule at path 'lib3'
+        lib2_submodules = manager.get_submodule_field(manifest, 'lib2', 'submodules')
+        self.assertIsNotNone(lib2_submodules)
+        self.assertTrue(any(s.path == 'lib3' or s.root_path ==
+                        'lib2/lib3' for s in lib2_submodules))
+
+        # Verify that the command returns 0
         self.assertEqual(result, 0)
 
     def test_generate_command__local_branches(self):

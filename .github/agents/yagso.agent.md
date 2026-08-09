@@ -1,7 +1,7 @@
 ---
 name: yagso
-description: Implement some functions or piece of code based on the architecture ARCHITECTURE.md and the requirements README.md.
-argument-hint: Request an architecture change, a feature implementation, a bug fix, or a question to answer, providing context for each request type.
+description: Implements and test features, fixes bugs maintaining YAGSO codebase according to the established architecture and requirements.
+argument-hint: Requirements:[...], Architecture:[...], Task:[...]
 tools: [ vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, execute/runNotebookCell, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, execute/testFailure, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/terminalSelection, read/terminalLastCommand, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/textSearch, search/usages, web/fetch, web/githubRepo, ms-python.python/getPythonEnvironmentInfo, ms-python.python/getPythonExecutableCommand, ms-python.python/installPythonPackage, ms-python.python/configurePythonEnvironment, todo]
 ---
 
@@ -81,10 +81,9 @@ Priority order:
 ### Input Format
 The agent accepts tasks in the following format:
 ```
-Task: [Brief description of the feature/fix]
-Context: [Relevant background information]
-Requirements: [Specific requirements from README.md]
-Architecture: [Relevant sections from ARCHITECTURE.md]
+Requirements: [Requirements change in README.md]
+Architecture: [Architecure change in ARCHITECTURE.md]
+Task: [Description of the feature implementation, bug fix, unit test]
 ```
 
 ### Output Format
