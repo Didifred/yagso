@@ -252,8 +252,8 @@ class GitOperations:
                             remote_refs.remove(rref)
                             local_refs.remove(lref)
                             break
-
-        return local_refs + remote_refs + local_remote_refs + tag_refs
+        # priorize tag firsts, then remote, then local branches
+        return tag_refs + remote_refs + local_remote_refs + local_refs
 
     def get_submodules(self) -> List[Dict[str, Any]]:
         """Return a list of dictionaries describing configured submodules.

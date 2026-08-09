@@ -49,8 +49,8 @@ class TestCli(BaseGitTest):
         self.assertEqual(commit_value, 'ddb8e804644540502551230b8a9eeb5ffe797abf')
 
         lib1_refs = manager.get_submodule_field(manifest, 'lib1', 'ref')
-        self.assertEqual(lib1_refs[0], 'origin/main')
-        self.assertEqual(lib1_refs[1], '1.0')
+        self.assertEqual(lib1_refs[1], 'origin/main')
+        self.assertEqual(lib1_refs[0], '1.0')
 
         tracking_branch_value = manager.get_submodule_field(
             manifest, 'lib2/lib3', 'tracking_branch')

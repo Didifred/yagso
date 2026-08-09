@@ -72,3 +72,9 @@ These latest commands are simple git cli wrapper on a repo and its submodules (-
 - **`yagso update --init --remote`**: Updates submodules to the latest commit on their tracking branch.
 
 - **`yagso push`**: Pushes all commits of the submodules to the remote repository.
+
+### Miscs
+
+Line count :
+
+**`pygount --format=summary .\yagso\`**
