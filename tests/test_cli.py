@@ -95,6 +95,18 @@ class TestCli(BaseGitTest):
         # Verify that un yaml file is generated and contains the local branch
         # test_submodule_branch and with main branch for submodule lib2/lib3 written main|origin.
         # Verify that command returns 0
+        # Load generated manifest and verify refs include the local branch
+        pathYaml = Path('yagso.yaml')
+        manager = ManifestManager()
+        manifest = manager.load_manifest(pathYaml)
+
+        refs = manager.get_submodule_field(manifest, 'lib2/lib3', 'ref')
+        # Ensure refs is a list and contains the test local branch
+        self.assertIsNotNone(refs)
+        self.assertTrue(any('test_submodule_branch' in r for r in refs))
+        # Ensure there's an entry that encodes main and origin separated by '|'
+        self.assertTrue(any(('main' in r and 'origin' in r and '|' in r) for r in refs))
+
         self.assertEqual(result, 0)
 
     def test_configure_command(self):
