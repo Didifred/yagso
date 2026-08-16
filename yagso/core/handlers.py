@@ -28,7 +28,7 @@ class GenerateHandler(CommandHandler):
         create_bom = options.get("BOM", False)
 
         manifest = self.orchestrator.generate_manifest(root_path, create_bom=create_bom)
-        formatter.success(f"Generated manifest with {len(manifest.submodules)} submodules")
+        formatter.success(f"Generated manifest")
 
 
 class UpdateHandler(CommandHandler):
@@ -36,8 +36,10 @@ class UpdateHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         formatter = OutputFormatter()
+        root_path = Path.cwd()
 
-        self.orchestrator.update_submodules(options)
+        self.orchestrator.update_submodules(options, root_path)
+
         init_msg = " and initialized" if options.get("init", False) else ""
         remote_msg = " from remote" if options.get("remote", False) else ""
         formatter.success(f"Updated submodules{init_msg}{remote_msg}")
@@ -51,7 +53,11 @@ class ConfigureHandler(CommandHandler):
         root_path = Path.cwd()
 
         self.orchestrator.configure_repository(root_path)
-        formatter.success("Repository configured according to manifest")
+
+        # Regenerate the manifest after configuration to reflect any changes made during the process
+        manifest = self.orchestrator.generate_manifest(root_path, False)
+
+        formatter.success(f"Repository configured according to manifest")
 
 
 class CommitHandler(CommandHandler):

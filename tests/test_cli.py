@@ -190,6 +190,34 @@ class TestCli(BaseGitTest):
         finally:
             manager.save_manifest(manifest, pathYaml)
 
+    def test_configure_command_tracking_change(self):
+        """Test that configure command works with tracking branch"""
+        # Modify yagso.yaml to change lib2/lib3 url to ssh
+        pathYaml = Path('yagso.yaml')
+        manager = ManifestManager()
+        manifest = manager.load_manifest(pathYaml)
+        new_manifest = copy.deepcopy(manifest)
+        manager.update_submodule_field(
+            new_manifest,
+            'lib2/lib3',
+            'tracking_branch',
+            'main')
+
+        # Write modified manifest back
+        manager.save_manifest(new_manifest, pathYaml)
+
+        try:
+            controller = CLIController()
+
+            result = controller.run(['configure'])
+
+            # Verify that lib2/lib3 tracking branch change to main  and the command returns 0
+            self.assertEqual(result, 0)
+
+        finally:
+            # Write original manifest back to yaml
+            manager.save_manifest(manifest, pathYaml)
+
     def test_configure_command_add_submodule(self):
         """Test that configure command works with adding a new submodule."""
         # Modify yagso.yaml to add a new submodule addedsub
@@ -250,6 +278,38 @@ class TestCli(BaseGitTest):
             self.assertEqual(result, 0)
 
             # TODO : stage upper level submodules ?
+        finally:
+            manager.save_manifest(manifest, pathYaml)
+
+    def test_configure_command_add_submodule_hierarchy(self):
+        """Test that configure command works with adding a new submodule."""
+        # Modify yagso.yaml to add a new submodule addedsub
+        pathYaml = Path('yagso.yaml')
+        manager = ManifestManager()
+        manifest = manager.load_manifest(pathYaml)
+        new_manifest = copy.deepcopy(manifest)
+
+        sub_def = SubmoduleDefinition(
+            root_path='lib4',
+            name='testaddedsubdepth',
+            path='lib4',
+            url='https://github.com/Didifred/yagso_test_repo_4.git',
+            commit='HEAD'
+        )
+        manager.add_submodule_definition(new_manifest, sub_def)
+
+        # Write modified manifest back
+        manager.save_manifest(new_manifest, pathYaml)
+
+        try:
+            controller = CLIController()
+
+            result = controller.run(['configure'])
+
+            # Verify that testaddedsubdepth submodule has been added and that the command returns 0
+            # Verify that inner submodules has been discovered too in yagso.yaml !
+            self.assertEqual(result, 0)
+
         finally:
             manager.save_manifest(manifest, pathYaml)
 
