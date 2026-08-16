@@ -6,8 +6,8 @@ from .submodule import SubmoduleDefinition
 
 
 @dataclass
-class Manifest:
-    """Represents the yagso.yaml manifest structure."""
+class Bom:
+    """Represents the BOM.yaml bill of material structure."""
     submodules: List[SubmoduleDefinition]
     version: str = "1.0"
 
@@ -16,12 +16,8 @@ class Manifest:
         status = None
 
         for sub in subs:
-            if not sub.name:
-                raise ValueError("Submodule name cannot be empty")
             if not sub.path:
                 raise ValueError("Submodule path cannot be empty")
-            if not sub.url:
-                raise ValueError("Submodule URL cannot be empty")
             if not sub.commit:
                 raise ValueError("Submodule commit hash cannot be empty")
             if not sub.root_path:
@@ -56,7 +52,7 @@ class Manifest:
     def from_dict(cls, data: dict) -> 'Manifest':
         """Create Manifest from dictionary representation."""
         version = data.get("version", "1.0")
-        submodules = [SubmoduleDefinition.from_dict(s, False) for s in data.get("submodules", [])]
+        submodules = [SubmoduleDefinition.from_dict(s, True) for s in data.get("submodules", [])]
 
         # Set root paths for all submodules based on their hierarchy
         cls._set_root_paths(submodules)

@@ -7,6 +7,7 @@ from typing import Optional, List
 
 from .git_ops import GitOperations
 from ..domain.manifest import Manifest
+from ..domain.bom import Bom
 from ..domain.submodule import SubmoduleDefinition
 
 
@@ -376,3 +377,55 @@ class ManifestManager:
                 yaml.dump(bom, f, default_flow_style=False, sort_keys=False)
         except IOError as e:
             raise IOError(f"Failed to save BOM: {e}") from e
+
+    def load_bom(self, path: Path) -> Bom:
+        """Load BOM.yaml manifest from file.
+
+        Args:
+            path (Path): file path to load the manifest from
+
+        Raises:
+            FileNotFoundError: Manifest file not found at the specified path
+            ValueError: Manifest file is empty or contains invalid YAML
+            ValueError: Manifest file is missing required fields or has invalid structure
+
+        Returns:
+            Manifest: Loaded manifest object
+        """
+        if not path.exists():
+            raise FileNotFoundError(f"Manifest file not found: {path}")
+
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+                if data is None:
+                    raise ValueError("Empty manifest file")
+                return Bom.from_dict(data)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML in manifest: {e}") from e
+
+    def get_submodule_field(self, bom: Bom, root_path: str, field_name: str) -> Optional:
+        """Get a specific field of a submodule identified by root_path.
+
+        Args:
+            bom (Bom): The manifest to query
+            root_path (str): The root_path of the submodule to query
+            field_name (str): The field name to retrieve (e.g., 'commit', 'url', 'tracking_branch')
+
+        Raises:
+            ValueError: Submodule not found with the specified root_path
+            ValueError: Invalid field name for SubmoduleDefinition
+
+        Returns:
+            The value of the specified field for the submodule
+        """
+        submodule = self._find_submodule_by_root_path(bom.submodules, root_path)
+
+        if not submodule:
+            raise ValueError(f"Submodule not found with root_path: {root_path}")
+
+        if not hasattr(submodule, field_name):
+            raise ValueError(
+                f"Invalid field name '{field_name}' for SubmoduleDefinition")
+
+        return getattr(submodule, field_name)

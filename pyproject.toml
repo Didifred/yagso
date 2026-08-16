@@ -9,18 +9,23 @@ description = "A Python CLI utility"
 authors = [{name = "didifred", email = "didifred.web@gmail.com"}]
 dependencies = [
     "gitpython>=3.1.0",
-    "pyyaml>=6.0",
+    "pyyaml>=6.0"
 ]
 
 [project.optional-dependencies]
 dev = [
+    "pytest",
     "coverage",
-    "pygount"
+    "pygount",
+    "deadcode"
 ]
 
 [tool.setuptools.packages.find]
 include = ["yagso*"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
 
 [tool.autopep8]
 max_line_length = 100
