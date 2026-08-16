@@ -5,11 +5,9 @@ import stat
 import git
 import shutil
 from pathlib import Path
-from collections import OrderedDict
 from typing import Dict, List, Any, Optional
 from git import Repo, Submodule, Git
 from git.config import GitConfigParser
-from contextlib import suppress
 from ..domain.submodule import SubmoduleDefinition
 
 

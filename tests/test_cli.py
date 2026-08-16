@@ -64,7 +64,7 @@ class TestCli(BaseGitTest):
         # Verify that lib2 contains an inner submodule at path 'lib3'
         lib2_submodules = manager.get_submodule_field(manifest, 'lib2', 'submodules')
         self.assertIsNotNone(lib2_submodules)
-        self.assertTrue(any(s.path == 'lib3' or s.root_path ==
+        self.assertTrue(any(s.path == 'lib3' and s.root_path ==
                         'lib2/lib3' for s in lib2_submodules))
 
         # Verify that the command returns 0
@@ -289,27 +289,6 @@ class TestCli(BaseGitTest):
             manager.save_manifest(manifest, pathYaml)
 
     def test_generate_command__bom(self):
-        """Test that generate with --BOM produces BOM.yaml with expected structure."""
-        controller = CLIController()
-
-        result = controller.run(['generate', '--BOM'])
-
-        self.assertEqual(result, 0)
-
-        bom_path = Path('BOM.yaml')
-        self.assertTrue(bom_path.exists())
-
-        with open(bom_path, 'r', encoding='utf-8') as f:
-            bom = yaml.safe_load(f)
-
-        self.assertIn('submodules', bom)
-        # Ensure first submodule entry contains path and files keys
-        if bom.get('submodules'):
-            first = bom['submodules'][0]
-            self.assertIn('path', first)
-            self.assertIn('files', first)
-
-    def test_generate_command__bom2(self):
         """Test that generate --BOM command works."""
         controller = CLIController()
 
@@ -319,20 +298,23 @@ class TestCli(BaseGitTest):
         pathYaml = Path('BOM.yaml')
         manager = ManifestManager()
 
-        # TODO: Implement BOM manifest loading and validation in ManifestManager
-        # manifest = manager.load_manifest(pathYaml)
+        bom = manager.load_bom(pathYaml)
 
-        # commit_value = manager.get_submodule_field(manifest, 'lib1', 'commit')
-        # self.assertEqual(commit_value, 'ddb8e804644540502551230b8a9eeb5ffe797abf')
+        commit_value = manager.get_submodule_field(bom, 'lib1', 'commit')
+        self.assertEqual(commit_value, 'ddb8e804644540502551230b8a9eeb5ffe797abf')
 
-        # lib1_refs = manager.get_submodule_field(manifest, 'lib1', 'ref')
-        # self.assertEqual(lib1_refs[0], '1.0')
+        lib1_refs = manager.get_submodule_field(bom, 'lib1', 'ref')
+        self.assertEqual(lib1_refs, '1.0')
 
         # Verify that lib2 contains an inner submodule at path 'lib3'
-        # lib2_submodules = manager.get_submodule_field(manifest, 'lib2', 'submodules')
-        # self.assertIsNotNone(lib2_submodules)
-        # self.assertTrue(any(s.path == 'lib3' or s.root_path ==
-        #                'lib2/lib3' for s in lib2_submodules))
+        lib2_submodules = manager.get_submodule_field(bom, 'lib2', 'submodules')
+        self.assertIsNotNone(lib2_submodules)
+        self.assertTrue(any(s.path == 'lib3' and s.root_path ==
+                            'lib2/lib3' for s in lib2_submodules))
+
+        # Verify that submodule contains files field with at least one file
+        lib1_files = manager.get_submodule_field(bom, 'lib1', 'files')
+        self.assertIsNotNone(lib1_files)
 
         # Verify that the command returns 0
         self.assertEqual(result, 0)
