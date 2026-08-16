@@ -128,6 +128,9 @@ YAGSO (Yet Another Git Submodule Orchestrator) is a CLI tool for managing Git su
   - `load_manifest(path)`: Load yagso.yaml
   - `save_manifest(manifest, path)`: Save manifest
   - `generate_from_repository(root_path)`: Create manifest from .gitmodules
+  - `save_bom(manifest, path, repo_root)`: Create a Bill Of Materials `BOM.yaml` that mirrors the
+    manifest structure but keeps only `path`, the recorded `commit`, a single preferred `ref` (first
+    entry in refs list) and a `files` list containing repository files for each submodule.
 
 ## Data Flow
 
@@ -137,6 +140,8 @@ YAGSO (Yet Another Git Submodule Orchestrator) is a CLI tool for managing Git su
 3. GenerateHandler calls SubmoduleOrchestrator.generate_manifest()
 4. SubmoduleOrchestrator uses GitOperations to discover submodules
 5. ManifestManager generates and saves yagso.yaml
+5b. If `--BOM` was requested, ManifestManager also generates `BOM.yaml` containing paths, the recorded commit,
+  a single preferred ref per submodule (the first ref entry), and a file listing for each submodule
 6. OutputFormatter displays success
 
 ### Update Command Flow
