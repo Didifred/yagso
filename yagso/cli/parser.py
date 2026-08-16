@@ -23,6 +23,11 @@ class ArgumentParser:
             "generate",
             help="Generate yagso.yaml manifest from repository structure"
         )
+        generate_parser.add_argument(
+            "--BOM",
+            action="store_true",
+            help="Also generate a Bill Of Materials file (BOM.yaml) listing repo paths and files"
+        )
 
         # update command
         update_parser = subparsers.add_parser(
@@ -86,6 +91,8 @@ class ArgumentParser:
         if parsed.command == "update":
             options["init"] = getattr(parsed, "init", False)
             options["remote"] = getattr(parsed, "remote", False)
+        elif parsed.command == "generate":
+            options["BOM"] = getattr(parsed, "BOM", False)
 
         elif parsed.command == "commit":
             options["message"] = getattr(parsed, "message", "")

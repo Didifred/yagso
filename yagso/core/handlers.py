@@ -25,8 +25,9 @@ class GenerateHandler(CommandHandler):
     def execute(self, options: Dict[str, Any]) -> None:
         formatter = OutputFormatter()
         root_path = Path.cwd()
+        create_bom = options.get("BOM", False)
 
-        manifest = self.orchestrator.generate_manifest(root_path)
+        manifest = self.orchestrator.generate_manifest(root_path, create_bom=create_bom)
         formatter.success(f"Generated manifest with {len(manifest.submodules)} submodules")
 
 

@@ -1,5 +1,6 @@
 """Infrastructure layer for manifest file operations."""
 
+import re
 import yaml
 from pathlib import Path
 from typing import Optional, List
@@ -291,3 +292,87 @@ class ManifestManager:
                 sub.submodules = child_subs
 
         return sub
+
+    def _choose_preferred_ref(self, refs: Optional[List[str]]) -> Optional[str]:
+        """Return the first ref entry (trim surrounding quotes)."""
+        if not refs:
+            return None
+
+        first = refs[0]
+        if not first:
+            return None
+
+        # strip surrounding single/double quotes if present
+        return first.strip().strip("'\"")
+
+    def _list_files(
+            self,
+            repo_root: Path,
+            sub_root: str,
+            child_submodules: List[SubmoduleDefinition]) -> List[str]:
+        """List files under a submodule filesystem path, excluding nested submodule folders and .git."""
+        fs_path = repo_root / sub_root
+        if not fs_path.exists() or not fs_path.is_dir():
+            return []
+
+        child_names = {c.path for c in child_submodules} if child_submodules else set()
+        files: List[str] = []
+
+        for p in fs_path.rglob('*'):
+            if not p.is_file():
+                continue
+            # skip anything under a .git folder
+            if '.git' in p.parts:
+                continue
+
+            # skip files that are under a nested submodule top-level folder
+            rel = p.relative_to(fs_path)
+            if rel.parts and rel.parts[0] in child_names:
+                continue
+
+            # skip common git metadata files
+            if rel.name in {'.gitmodules', '.gitignore', '.gitattributes'}:
+                continue
+
+            files.append(rel.as_posix())
+
+        return sorted(files)
+
+    def save_bom(self, manifest: Manifest, path: Path, repo_root: Path) -> None:
+        """Save a Bill Of Materials (BOM.yaml) reflecting repository paths and a single preferred ref per submodule.
+
+        The BOM mirrors the structure of yagso.yaml (version + submodules), but each submodule entry only keeps
+        the `path` (not the name), a single `ref` chosen by priority (tag, remote branch, local branch), and a
+        `files` list containing files in the repository at that submodule path.
+        """
+        def _conv(sub: SubmoduleDefinition):
+            entry = {"path": sub.path}
+
+            # keep commit as requested
+            if getattr(sub, 'commit', None):
+                entry["commit"] = sub.commit
+
+            chosen = self._choose_preferred_ref(getattr(sub, 'ref', None))
+            if chosen:
+                entry["ref"] = chosen
+
+            # list files for this submodule (exclude nested submodules)
+            files = self._list_files(repo_root, sub.root_path, sub.submodules)
+            entry["files"] = files
+
+            if sub.submodules:
+                entry["submodules"] = [_conv(c) for c in sub.submodules]
+
+            return entry
+
+        bom = {
+            "version": getattr(manifest, 'version', '1.0'),
+            "submodules": [_conv(s) for s in manifest.submodules]
+        }
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                yaml.dump(bom, f, default_flow_style=False, sort_keys=False)
+        except IOError as e:
+            raise IOError(f"Failed to save BOM: {e}") from e
