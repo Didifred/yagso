@@ -166,11 +166,12 @@ class GitOperations:
                 pass
 
     def get_recorded_commit(self, path: str) -> Optional[str]:
-        """Return the gitlink commit SHA for `path` recorded in `HEAD`.
+        """Return the gitlink commit SHA for `path` recorded in the index or `HEAD`.
 
-        This reads the index/tree for `HEAD` and extracts the commit-like
-        object id for the gitlink entry. If the path is not present or the
-        Git command fails this returns ``None``.
+        This first checks the staging area (index) for staged changes. If the
+        submodule is found in the index, its commit SHA is returned. Otherwise,
+        it reads from `HEAD`. This allows detection of staged but uncommitted
+        submodule changes.
 
         Args:
             path: relative path to the submodule/gitlink inside the repo.
@@ -178,20 +179,34 @@ class GitOperations:
         Returns:
             Commit SHA string (7-40 hex chars) if present, otherwise ``None``.
         """
+        sha = None
+
+        # Check staging area (index) first
         try:
-            out = self.repo.git.ls_tree('HEAD', '--', path)
+            out = self.repo.git.ls_files('-s', '--', path)
+            out = (out or '').strip()
+            if out:
+                # Expect a line like: "160000 <sha> 0\t<path>"
+                m = re.search(r"160000\s+([0-9a-fA-F]{7,40})", out)
+                if m:
+                    sha = m.group(1)
         except git.GitCommandError:
-            return None
+            pass
 
-        out = (out or '').strip()
-        if not out:
-            return None
+        # Fall back to HEAD if not in index
+        if sha is None:
+            try:
+                out = self.repo.git.ls_tree('HEAD', '--', path)
+                out = (out or '').strip()
+                if out:
+                    # Expect a line like: "160000 commit <sha>\t<path>"
+                    m = re.search(r"commit\s+([0-9a-fA-F]{7,40})", out)
+                    if m:
+                        sha = m.group(1)
+            except git.GitCommandError:
+                pass
 
-        # Expect a line like: "160000 commit <sha>\t<path>"
-        m = re.search(r"commit\s+([0-9a-fA-F]{7,40})", out)
-        if m:
-            return m.group(1)
-        return None
+        return sha
 
     def get_refs_containing_commit_at_path(self, worktree_path: Path, commit: str) -> List[str]:
         """Return refs in a worktree that point at the given `commit`.
@@ -199,7 +214,7 @@ class GitOperations:
         This inspects the repository at `worktree_path` and lists refs that
         directly point at the supplied `commit` (branches, tags and remotes).
         Symbolic HEAD refs are filtered out, and remote branches are returned in the form
-        ``<branch>|<remote>`` if a local branch is checkouted.
+        ``<remote>|<branch>`` if a local branch is checkouted.
 
         Args:
             worktree_path: filesystem path to the repository to inspect.
@@ -234,7 +249,7 @@ class GitOperations:
         remote_refs = [r for r in remote_refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
 
         # Local branches when the same commit is already exposed
-        # through a remote branch is indicated <branch>|<remote>.
+        # through a remote branch is indicated <remote>|<branch>|.
         remote_names = {remote.name for remote in sub_repo.remotes}
         matching_remote_names = set()
         local_remote_refs = []
@@ -246,7 +261,7 @@ class GitOperations:
 
                     for lref in local_refs:
                         if lref == remote_ref:
-                            local_remote_refs.append(lref + '|' + remote_prefix)
+                            local_remote_refs.append(remote_prefix + '|' + lref)
                             remote_refs.remove(rref)
                             local_refs.remove(lref)
                             break
@@ -349,6 +364,8 @@ class GitOperations:
             ValueError: if the submodule path does not exist in the filesystem.
             RuntimeError: if a git operation fails while applying changes.
         """
+        stage_gitmodules = False
+        stage_index = False
 
         try:
             submodule = self.repo.submodule(name)
@@ -380,12 +397,18 @@ class GitOperations:
                 # Checkout same commit
                 submodule.module().git.checkout(commit_sha)
 
+                # Stage .gitmodules
+                stage_gitmodules = True
+
             # Update URL if it differs (handle https <-> ssh changes)
             current_url = submodule.url
             if current_url != submodule_def.url:
                 self.repo.git.config('--file', '.gitmodules',
                                      f"submodule.{submodule_def.name}.url", submodule_def.url)
                 self.repo.git.submodule('sync', '--', submodule_def.name)
+
+                # Stage .gitmodules
+                stage_gitmodules = True
 
             # Update tracking branch if it differs
             try:
@@ -404,6 +427,9 @@ class GitOperations:
                 else:
                     # Unset branch if tracking_branch is None or empty
                     self.repo.git.submodule("set-branch", "--unset", submodule_def.name)
+
+                # Stage .gitmodules
+                stage_gitmodules = True
 
             # Checkout the requested commit expressed by a branch/tag/hash in the submodule
             # Resolve commit-ish (branch/tag/hash) to a local SHA when possible and
@@ -435,7 +461,6 @@ class GitOperations:
                             f"Failed to resolve sha of {desired_ref} in submodule {
                                 submodule_def.name}") from e
 
-                # TODO - Maybe checkout also if commit field is a branch even if equal
                 if not GitOperations.sha_equal(current_commit, resolved_sha):
                     try:
                         if resolved_from_origin:
@@ -444,10 +469,27 @@ class GitOperations:
                                 "-b", desired_ref, "--track", origin_ref)
                         else:
                             sub_repo.git.checkout(desired_ref)
+
                     except Exception as e:
                         raise RuntimeError(
                             f"Failed to checkout {desired_ref} in submodule {
                                 submodule_def.name}: {e}") from e
+
+                    # Stage the submodule change in the parent repository
+                    stage_index = True
+
+            if stage_gitmodules:
+                try:
+                    self.repo.git.add('.gitmodules')
+                except Exception as e:
+                    raise RuntimeError(f"Failed to stage .gitmodules: {e}") from e
+
+            if stage_index:
+                try:
+                    self.repo.git.add(submodule_def.path)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to stage submodule path {submodule_def.path}: {e}") from e
 
         except ValueError as e:
             raise ValueError(f"Submodule not found: {submodule_def.path}: {e}") from e
@@ -495,9 +537,6 @@ class GitOperations:
         with config:
             pass
 
-        # Initialize and update working copy
-        submodule.update(recursive=True, init=True)
-
         # Checkout desired commit/branch
         if desired_commit:
             submodule.module().git.checkout(desired_commit)
@@ -517,6 +556,9 @@ class GitOperations:
             self.repo.git.add(path)
         except Exception as e:
             raise RuntimeError(f"Failed to stage submodule path {path}: {e}") from e
+
+        # Initialize and update eventual inner submodules recursively
+        submodule.module().git.submodule('update', '--init', '--recursive')
 
     def remove_submodule(self, block: Dict[str, Any]) -> None:
         """Remove a submodule described by a parsed .gitmodules block.
@@ -546,7 +588,6 @@ class GitOperations:
         # Lookup by name since paths can be duplicated across submodules
         try:
             submodule = self.repo.submodule(name)
-            submodule_git_dir = self._get_submodule_git_dir(submodule)
 
             submodule.remove(force=False, module=True)
         except Exception as e:
@@ -733,40 +774,21 @@ class GitOperations:
         except Exception as e:
             raise RuntimeError(f"Failed to move submodule {name} to {new_path}: {e}") from e
 
-    def clone_submodule(self, url: str, path: str, branch: str = "main") -> None:
-        """Clone a submodule."""
-        try:
-            # Use git command to add submodule
-            self.repo.git.submodule("add", "-b", branch, url, path)
-        except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to clone submodule {path}: {e}") from e
-
-    def update_submodule(self, path: str, options: Dict[str, Any]) -> None:
-        """Update a specific submodule."""
-        try:
-            if options.get("init", False):
-                # Initialize and update submodule
-                self.repo.git.submodule("update", "--init", "--recursive", path)
-            else:
-                # Just update existing submodules
-                self.repo.git.submodule("update", "--recursive", path)
-
-            if options.get("remote", False):
-                # Update to latest on remote branch
-                submodule_repo_path = self.repo_path / path
-                if submodule_repo_path.exists():
-                    submodule_repo = Repo(submodule_repo_path)
-                    submodule_repo.remotes.origin.pull()
-
-        except git.GitCommandError as e:
-            raise RuntimeError(f"Failed to update submodule {path}: {e}") from e
-        except ValueError as e:
-            raise ValueError(f"Submodule not found: {path}") from e
-
     def update_all_submodules(self, options: Dict[str, Any]) -> None:
         """Update all submodules."""
-        for submodule in self.repo.submodules:
-            self.update_submodule(submodule.path, options)
+
+        try:
+            if options.get("init", True) and options.get("remote", True):
+                # Initialize and update submodule
+                self.repo.git.submodule("update", "--init", "--remote", "--recursive")
+            elif options.get("init", True):
+                self.repo.git.submodule("update", "--init", "--recursive")
+            else:
+                # Just update existing submodules
+                self.repo.git.submodule("update", "--recursive")
+
+        except git.GitCommandError as e:
+            raise RuntimeError(f"Failed to update submodules : {e}") from e
 
     def commit_all(self, message: str) -> None:
         """Commit all changes recursively, deepest submodules first."""
@@ -935,7 +957,7 @@ class OrderedGitConfigParser(GitConfigParser):
         """Write sections with ordered fields"""
         all_sections = [s for s in self._sections.keys() if s != 'DEFAULT']
 
-        for i, section in enumerate(all_sections):
+        for _i, section in enumerate(all_sections):
             fp.write(f"[{section}]\n")
 
             section_dict = self._sections[section]

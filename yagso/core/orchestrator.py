@@ -59,8 +59,6 @@ class SubmoduleOrchestrator:
         if root_path is None:
             root_path = self.repo_path
 
-        # TODO : read existing manifest, in order to preserve fields that are not
-        # generated (eg commit)
         manifest = self.manifest_manager.generate_from_repository(root_path)
         manifest_path = root_path / "yagso.yaml"
         self.manifest_manager.save_manifest(manifest, manifest_path)
@@ -72,31 +70,14 @@ class SubmoduleOrchestrator:
 
         return manifest
 
-    def update_submodules(self, options: Dict[str, Any]) -> None:
-        """Update/initialize submodules based on manifest."""
-        manifest_path = self.repo_path / "yagso.yaml"
-        if not manifest_path.exists():
-            raise FileNotFoundError("yagso.yaml manifest not found. Run 'yagso generate' first.")
+    def update_submodules(self, options: Dict[str, Any], root_path: Optional[Path] = None) -> None:
+        """Update/initialize submodules recursively."""
 
-        manifest = self.manifest_manager.load_manifest(manifest_path)
+        if root_path is None:
+            root_path = self.repo_path
 
-        for submodule_def in manifest.submodules:
-            if options.get("init", False):
-                # Clone if not exists, then update
-                if not (self.repo_path / submodule_def.path).exists():
-                    # self.git_ops.clone_submodule(
-                    #    submodule_def.url,
-                    #    submodule_def.path,
-                    #    submodule_def.tracking_branch
-                    # )
-                    pass
-                else:
-                    # self.git_ops.update_submodule(submodule_def.path, options)
-                    pass
-            else:
-                # Just update existing
-                # self.git_ops.update_submodule(submodule_def.path, options)
-                pass
+        with GitOperations(root_path) as git_ops:
+            git_ops.update_all_submodules(options)
 
     def configure_repository(self, root_path: Optional[Path] = None) -> None:
         """Applies the manifest configuration to synchronize the repository's submodules.
