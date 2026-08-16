@@ -35,7 +35,10 @@ class SubmoduleOrchestrator:
         self.repo_path = repo_path
         self.manifest_manager = ManifestManager()
 
-    def generate_manifest(self, root_path: Optional[Path] = None) -> Manifest:
+    def generate_manifest(
+            self,
+            root_path: Optional[Path] = None,
+            create_bom: bool = False) -> Manifest:
         """Generates a YAGSO manifest (yagso.yaml) from the repository's submodule structure.
 
         This method scans the repository's submodule structure starting from the specified root path
@@ -61,6 +64,11 @@ class SubmoduleOrchestrator:
         manifest = self.manifest_manager.generate_from_repository(root_path)
         manifest_path = root_path / "yagso.yaml"
         self.manifest_manager.save_manifest(manifest, manifest_path)
+
+        # Optionally generate a Bill Of Materials (BOM.yaml)
+        if create_bom:
+            bom_path = root_path / "BOM.yaml"
+            self.manifest_manager.save_bom(manifest, bom_path, root_path)
 
         return manifest
 
