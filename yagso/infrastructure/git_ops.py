@@ -930,14 +930,14 @@ class GitOperations:
                 branch_name = matching_branch.name
                 if isinstance(matching_branch, git.RemoteReference):
                     local_branch_name = matching_branch.remote_head
-                    repo.git.checkout('-b', local_branch_name, '--track', branch_name)
+                    repo.git.checkout('-B', local_branch_name, '--track', branch_name)
 
                     branch_name = local_branch_name
                 else:
                     repo.git.checkout(branch_name)
             else:
                 branch_name = default_branch
-                repo.git.checkout('-b', branch_name, current_commit.hexsha)
+                repo.git.checkout('-B', branch_name, current_commit.hexsha)
         except Exception as e:
             raise RuntimeError(f"Failed to checkout branch {branch_name} : {e}") from e
 
