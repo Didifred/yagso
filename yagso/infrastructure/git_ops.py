@@ -619,8 +619,7 @@ class GitOperations:
         """Rebuild .git metadata for all submodules based on .gitmodules.
 
         This method is destructive: it removes existing `.git/modules` data
-        and may remove broken submodule working trees. It first creates a
-        backup via `backup_submodule_metadata()` and attempts to restore on
+        and may remove broken submodule working trees, attempts to restore on
         failure.
         """
         git_dir = Path(self.repo.git_dir)
@@ -794,17 +793,17 @@ class GitOperations:
         """Commit all changes recursively, deepest submodules first."""
         try:
             # Walk the whole submodule tree bottom-up
-            self._commit_recursive(self.repo, message)
+            branch = self._commit_recursive(self.repo, message, self.repo.active_branch.name)
 
             if self.repo.is_dirty():
                 # Checkout the main repository to a branch
-                self._checkout_ref_or_commit(self.repo)
+                branch = self._checkout_ref_or_commit(self.repo, branch)
 
                 # Stage the top-level repo last (picks up all gitlink updates)
                 self.repo.git.add(update=True)
 
                 # Commit the changes in module
-                self.repo.index.commit(f"Yagso : {message}")
+                self.repo.index.commit(f"bump change in {Path(self.repo.working_tree_dir).name} : {message}")
             else:
                 raise ValueError("No changes to commit")
         except git.GitCommandError as e:
@@ -853,7 +852,7 @@ class GitOperations:
 
         return git_dir
 
-    def _commit_recursive(self, repo: git.Repo, message: str) -> None:
+    def _commit_recursive(self, repo: git.Repo, message: str, branch) -> str:
         """Post-order DFS: commit deepest submodules before their parents."""
         for submodule in repo.submodules:
             if not submodule.module_exists():
@@ -862,44 +861,67 @@ class GitOperations:
             submodule_repo = submodule.module()
 
             # Recurse into this submodule's own submodules first
-            self._commit_recursive(submodule_repo, message)
+            branch = self._commit_recursive(submodule_repo, message, branch)
 
             # Commit only if something actually changed (file edits OR gitlink bump)
             if submodule_repo.is_dirty():
                 # First checkout on a branch
-                self._checkout_ref_or_commit(submodule_repo)
+                branch = self._checkout_ref_or_commit(submodule_repo, branch)
 
-                # Stage tracked files — including any gitlink update
+                # Stage only tracked files — including any gitlink update
                 submodule_repo.git.add(update=True)
 
                 # Commit the changes in this submodule
-                submodule_repo.index.commit(f"yagso : {message}")
+                submodule_repo.index.commit(f"bump change in {submodule.name} : {message}")
 
-    def _checkout_ref_or_commit(self, repo: git.Repo) -> None:
+        return branch
+
+    def _checkout_ref_or_commit(self, repo: git.Repo, default_branch: str) -> str:
         """Attach HEAD to a branch if one points to the current commit.
 
         When HEAD is detached this method searches for an existing local
         or remote-tracking branch that points at the current commit. If
-        one is found it is checked out. Otherwise create and checkout a branch yagso-#hexsha.
+        one is found it is checked out. Otherwise create and checkout the default branch.
+
+        Args:
+            repo: The git.Repo object to operate on.
+            default_branch: The name of the default branch to create if no matching branch is found.
+
+        Raises:
+            RuntimeError: If the checkout operation fails.
+
+        Returns:
+            The name of the branch that was checked out.
         """
         current_commit = repo.head.commit
 
+        # Submodules repo are usually in detached HEAD state, 
+        # so we need to find a branch that points to the current commit.
         if not repo.head.is_detached:
-            return  # Already on a branch, nothing to do
+            return repo.active_branch.name
 
         matching_branch = None
 
         for b in repo.branches:
+            # Check a local branch points to the current commit
             if b.commit == current_commit:
                 matching_branch = b
-                break
+
+                # prefer the default branch if it matches
+                if b.name == default_branch:
+                    break
 
         if matching_branch is None:
             for remote in repo.remotes:
                 for ref in remote.refs:
+                    # Check if the remote ref points to the current commit and is not a symbolic HEAD
                     if ref.commit == current_commit and ref.remote_head != 'HEAD':
                         matching_branch = ref
-                        break
+
+                        # prefer the default branch if it matches
+                        if ref.remote_head == default_branch:
+                            break
+                        
                 if matching_branch is not None:
                     break
 
@@ -909,13 +931,17 @@ class GitOperations:
                 if isinstance(matching_branch, git.RemoteReference):
                     local_branch_name = matching_branch.remote_head
                     repo.git.checkout('-b', local_branch_name, '--track', branch_name)
+
+                    branch_name = local_branch_name
                 else:
                     repo.git.checkout(branch_name)
             else:
-                branch_name = f"yagso-{current_commit.hexsha[:7]}"
+                branch_name = default_branch
                 repo.git.checkout('-b', branch_name, current_commit.hexsha)
         except Exception as e:
             raise RuntimeError(f"Failed to checkout branch {branch_name} : {e}") from e
+
+        return branch_name
 
 
 class OrderedGitConfigParser(GitConfigParser):

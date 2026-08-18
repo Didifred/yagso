@@ -143,7 +143,7 @@ class TestGitOps(BaseGitTest):
 
                 # Call the helper
                 with GitOperations(repo_path) as ops:
-                    ops._checkout_ref_or_commit(repo)
+                    ops._checkout_ref_or_commit(repo, 'default')
 
                 # After the helper, we should be on branch main
                 self.assertFalse(repo.head.is_detached)
@@ -160,11 +160,11 @@ class TestGitOps(BaseGitTest):
 
                 # Call the helper
                 with GitOperations(repo_path) as ops:
-                    ops._checkout_ref_or_commit(repo)
+                    ops._checkout_ref_or_commit(repo, 'default')
 
                 # After the helper, we should be on branch yagso-<commit_hash> for the second commit
                 self.assertFalse(repo.head.is_detached)
-                branch_name = f"yagso-{commit.hexsha[:7]}"
+                branch_name = f"default"
                 self.assertIn(branch_name, [b.name for b in repo.branches])
                 self.assertEqual(repo.head.commit.hexsha, commit.hexsha)
 
