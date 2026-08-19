@@ -3,7 +3,8 @@ Yet Another Git Submodule Orchestrator
 
 yagso is a CLI tool that manages Git submodule hierarchies via a YAML manifest.
 
-Instead of manually tracking which branch each submodule should be on, you declare it once, 
+Instead of manually tracking which branch each submodule should be on, you declare it once or 
+`generate` for repo, 
 and yagso handles `configure`, `commit`, and `push` recursively — including nested submodules.
 
 ## Building the Package
@@ -39,7 +40,7 @@ This will create distribution files in the `dist/` directory:
 
 Install the package using pip:
 ```bash
-pip install dist/yagso-0.1.0-py3-none-any.whl
+pip install --force-reinstall dist/yagso-0.1.0-py3-none-any.whl
 ```
 
 ## Development
