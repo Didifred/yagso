@@ -21,7 +21,7 @@ class ArgumentParser:
         # generate command
         generate_parser = subparsers.add_parser(
             "generate",
-            help="Generate yagso.yaml manifest from repository structure"
+            help="Generate a yagso.yaml manifest from the repository structure"
         )
         generate_parser.add_argument(
             "--BOM",
@@ -32,7 +32,7 @@ class ArgumentParser:
         # update command
         update_parser = subparsers.add_parser(
             "update",
-            help="Update submodules"
+            help="Update submodules without initializing new ones"
         )
         update_parser.add_argument(
             "--init",
@@ -54,7 +54,7 @@ class ArgumentParser:
         # commit command
         commit_parser = subparsers.add_parser(
             "commit",
-            help="Commit changes recursively"
+            help="Commit changes recursively, including submodule metadata"
         )
         commit_parser.add_argument(
             "--message",
@@ -64,7 +64,7 @@ class ArgumentParser:
         # push command
         push_parser = subparsers.add_parser(
             "push",
-            help="Push all commits to remote repository"
+            help="Push all submodule commits to the remote repository"
         )
 
     def parse(self, args: list) -> Dict[str, Any]:
@@ -81,6 +81,7 @@ class ArgumentParser:
                 raise ValueError("Invalid command-line arguments")
 
         if not parsed.command:
+            self.parser.print_help()
             return {"command": None}
 
         options = {
