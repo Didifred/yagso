@@ -244,29 +244,27 @@ class GitOperations:
         tag_refs = [r.strip() for r in tags_out.splitlines() if r.strip()]
         remote_refs = [r.strip() for r in remotes_out.splitlines() if r.strip()]
 
-        local_refs = [r for r in local_refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
-        tag_refs = [r for r in tag_refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
-        remote_refs = [r for r in remote_refs if not re.search(r'(^HEAD$|/HEAD$)', r)]
+        local_refs = [r for r in local_refs if r != 'HEAD']
+        tag_refs = [r for r in tag_refs if r != 'HEAD']
+        remote_refs = [r for r in remote_refs if r.rsplit('/', 1)[-1] != 'HEAD']
 
         # Local branches when the same commit is already exposed
-        # through a remote branch is indicated <remote>|<branch>|.
+        # through a remote branch is indicated <remote>|<branch>.
         remote_names = {remote.name for remote in sub_repo.remotes}
-        matching_remote_names = set()
         local_remote_refs = []
+        remaining_remote_refs = []
+        local_ref_set = set(local_refs)
         for rref in remote_refs:
             if '/' in rref:
                 remote_prefix, remote_ref = rref.split('/', 1)
-                if remote_prefix in remote_names:
-                    matching_remote_names.add(remote_ref)
-
-                    for lref in local_refs:
-                        if lref == remote_ref:
-                            local_remote_refs.append(remote_prefix + '|' + lref)
-                            remote_refs.remove(rref)
-                            local_refs.remove(lref)
-                            break
+                if remote_prefix in remote_names and remote_ref in local_ref_set:
+                    local_remote_refs.append(remote_prefix + '|' + remote_ref)
+                    local_ref_set.remove(remote_ref)
+                    continue
+            remaining_remote_refs.append(rref)
+        local_refs = [ref for ref in local_refs if ref in local_ref_set]
         # priorize tag firsts, then remote, then local branches
-        return tag_refs + remote_refs + local_remote_refs + local_refs
+        return tag_refs + remaining_remote_refs + local_remote_refs + local_refs
 
     def get_submodules(self) -> List[Dict[str, Any]]:
         """Return a list of dictionaries describing configured submodules.
@@ -458,8 +456,8 @@ class GitOperations:
                         resolved_from_origin = True
                     except Exception as e:
                         raise RuntimeError(
-                            f"Failed to resolve sha of {desired_ref} in submodule {
-                                submodule_def.name}") from e
+                            f"Failed to resolve sha of {desired_ref} in submodule "
+                            f"{submodule_def.name}") from e
 
                 if not GitOperations.sha_equal(current_commit, resolved_sha):
                     try:
@@ -472,8 +470,8 @@ class GitOperations:
 
                     except Exception as e:
                         raise RuntimeError(
-                            f"Failed to checkout {desired_ref} in submodule {
-                                submodule_def.name}: {e}") from e
+                            f"Failed to checkout {desired_ref} in submodule "
+                            f"{submodule_def.name}: {e}") from e
 
                     # Stage the submodule change in the parent repository
                     stage_index = True
@@ -684,7 +682,8 @@ class GitOperations:
                 shutil.copytree(modules_dir, backup_modules_dir, symlinks=True)
         except Exception as e:
             raise RuntimeError(
-                f"Failed to backup modules directory {modules_dir} to {backup_modules_dir}: {e}") from e
+                f"Failed to backup modules directory {modules_dir} to "
+                f"{backup_modules_dir}: {e}") from e
 
         # Backup config
         config_path = git_dir / 'config'
@@ -710,7 +709,8 @@ class GitOperations:
                 shutil.copytree(backup_modules_dir, modules_dir, symlinks=True)
         except Exception as e:
             raise RuntimeError(
-                f"Failed to restore modules directory from {backup_modules_dir} to {modules_dir}: {e}") from e
+                f"Failed to restore modules directory from {backup_modules_dir} to "
+                f"{modules_dir}: {e}") from e
 
         # Restore config
         backup_config_path = git_dir / 'config.backup'
@@ -720,7 +720,8 @@ class GitOperations:
                 shutil.copy2(backup_config_path, config_path)
         except Exception as e:
             raise RuntimeError(
-                f"Failed to restore config file from {backup_config_path} to {config_path}: {e}") from e
+                f"Failed to restore config file from {backup_config_path} to "
+                f"{config_path}: {e}") from e
 
     def move_submodule(self, name: str, new_path: str) -> None:
         """Move a submodule to a new path using `git mv` and update .gitmodules.
@@ -803,7 +804,8 @@ class GitOperations:
                 self.repo.git.add(update=True)
 
                 # Commit the changes in module
-                self.repo.index.commit(f"bump change in {Path(self.repo.working_tree_dir).name} : {message}")
+                self.repo.index.commit(
+                    f"bump change in {Path(self.repo.working_tree_dir).name} : {message}")
             else:
                 raise ValueError("No changes to commit")
         except git.GitCommandError as e:
@@ -895,7 +897,7 @@ class GitOperations:
         """
         current_commit = repo.head.commit
 
-        # Submodules repo are usually in detached HEAD state, 
+        # Submodules repo are usually in detached HEAD state,
         # so we need to find a branch that points to the current commit.
         if not repo.head.is_detached:
             return repo.active_branch.name
@@ -914,14 +916,15 @@ class GitOperations:
         if matching_branch is None:
             for remote in repo.remotes:
                 for ref in remote.refs:
-                    # Check if the remote ref points to the current commit and is not a symbolic HEAD
+                    # Check if the remote ref points to the current commit and is not a
+                    # symbolic HEAD
                     if ref.commit == current_commit and ref.remote_head != 'HEAD':
                         matching_branch = ref
 
                         # prefer the default branch if it matches
                         if ref.remote_head == default_branch:
                             break
-                        
+
                 if matching_branch is not None:
                     break
 

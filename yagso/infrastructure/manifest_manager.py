@@ -258,7 +258,8 @@ class ManifestManager:
         # commit is required — fail fast if we couldn't determine it
         if not commit:
             raise ValueError(
-                f"Unable to determine recorded commit for submodule '{name}' at path '{path}' in repository {repo_fs_path}")
+                f"Unable to determine recorded commit for submodule '{name}' at path '{path}' in "
+                f"repository {repo_fs_path}")
 
         # prepare submodule definition
 
