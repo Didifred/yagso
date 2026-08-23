@@ -123,8 +123,10 @@ class TestGitOps(BaseGitTest):
 
                 self.assertIn('origin|feature', refs)
                 self.assertNotIn('feature', refs)
+                self.assertNotIn('origin/feature', refs)
                 self.assertNotIn('origin/HEAD', refs)
                 self.assertNotIn('origin', refs)
+                self.assertNotIn('HEAD', refs)
             finally:
                 repo.close()
 
