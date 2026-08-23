@@ -240,31 +240,52 @@ class GitOperations:
         except git.GitCommandError:
             return []
 
+        active_branch = None
+        if not sub_repo.head.is_detached:
+            active_branch = sub_repo.active_branch.name
+
         local_refs = [r.strip() for r in heads_out.splitlines() if r.strip()]
         tag_refs = [r.strip() for r in tags_out.splitlines() if r.strip()]
         remote_refs = [r.strip() for r in remotes_out.splitlines() if r.strip()]
 
         local_refs = [r for r in local_refs if r != 'HEAD']
         tag_refs = [r for r in tag_refs if r != 'HEAD']
-        remote_refs = [r for r in remote_refs if r.rsplit('/', 1)[-1] != 'HEAD']
+
+        # Filter out remote refs that are symbolic HEADs (e.g., origin/HEAD)
+        # or contain only the remote name (e.g., origin).
+        remote_names = {remote.name for remote in sub_repo.remotes}
+        filtered_remote_refs = []
+        for remote_ref in remote_refs:
+            for remote_name in remote_names:
+                if remote_ref.startswith(remote_name + '/') and remote_ref != remote_name + '/HEAD':
+                    branch_name = remote_ref[len(remote_name) + 1:]
+                    filtered_remote_refs.append((remote_name, branch_name, remote_ref))
+                    break
 
         # Local branches when the same commit is already exposed
         # through a remote branch is indicated <remote>|<branch>.
-        remote_names = {remote.name for remote in sub_repo.remotes}
         local_remote_refs = []
         remaining_remote_refs = []
         local_ref_set = set(local_refs)
-        for rref in remote_refs:
-            if '/' in rref:
-                remote_prefix, remote_ref = rref.split('/', 1)
-                if remote_prefix in remote_names and remote_ref in local_ref_set:
-                    local_remote_refs.append(remote_prefix + '|' + remote_ref)
-                    local_ref_set.remove(remote_ref)
-                    continue
-            remaining_remote_refs.append(rref)
-        local_refs = [ref for ref in local_refs if ref in local_ref_set]
-        # priorize tag firsts, then remote, then local branches
-        return tag_refs + remaining_remote_refs + local_remote_refs + local_refs
+        for rref in filtered_remote_refs:
+            remote_name = rref[0]
+            branch_name = rref[1]
+            remote_ref = rref[2]
+
+            if branch_name in local_ref_set:
+                if active_branch == branch_name:
+                    active_branch = remote_name + '|' + branch_name
+                else:
+                    local_remote_refs.append(remote_name + '|' + branch_name)
+                local_ref_set.remove(branch_name)
+            else:
+                remaining_remote_refs.append(remote_ref)
+
+        local_refs = [ref for ref in local_refs if ref in local_ref_set and ref != active_branch]
+
+        # priorize tag firsts, active branch, remote ones, finally local branches
+        active_branch_refs = [active_branch] if active_branch else []
+        return tag_refs + active_branch_refs + remaining_remote_refs + local_remote_refs + local_refs
 
     def get_submodules(self) -> List[Dict[str, Any]]:
         """Return a list of dictionaries describing configured submodules.
