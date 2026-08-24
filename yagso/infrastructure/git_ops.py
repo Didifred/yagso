@@ -208,41 +208,32 @@ class GitOperations:
 
         return sha
 
-    def get_refs_containing_commit_at_path(self, worktree_path: Path, commit: str) -> List[str]:
+    def get_refs_containing_commit_at_path(self, commit: str) -> List[str]:
         """Return refs in a worktree that point at the given `commit`.
 
-        This inspects the repository at `worktree_path` and lists refs that
+        This inspects the repository and lists refs that
         directly point at the supplied `commit` (branches, tags and remotes).
         Symbolic HEAD refs are filtered out, and remote branches are returned in the form
-        ``<remote>|<branch>`` if a local branch is checkouted.
+        ``<remote>|<branch>`` if exist a local branch too.
 
         Args:
-            worktree_path: filesystem path to the repository to inspect.
             commit: commit-ish (SHA or ref) to check for.
 
         Returns:
             List of ref names (short form). Returns an empty list if the path
             is not a repository or the git command fails.
         """
-        try:
-            sub_repo = Repo(worktree_path)
-        except git.InvalidGitRepositoryError:
-            return []
 
         try:
             # List heads, tags and remotes that point at the exact commit.
-            heads_out = sub_repo.git.for_each_ref(
+            heads_out = self.repo.git.for_each_ref(
                 '--format=%(refname:short)', '--points-at', commit, 'refs/heads')
-            tags_out = sub_repo.git.for_each_ref('--format=%(refname:short)', '--points-at', commit,
-                                                 'refs/tags')
-            remotes_out = sub_repo.git.for_each_ref(
+            tags_out = self.repo.git.for_each_ref(
+                '--format=%(refname:short)', '--points-at', commit, 'refs/tags')
+            remotes_out = self.repo.git.for_each_ref(
                 '--format=%(refname:short)', '--points-at', commit, 'refs/remotes')
         except git.GitCommandError:
             return []
-
-        active_branch = None
-        if not sub_repo.head.is_detached:
-            active_branch = sub_repo.active_branch.name
 
         local_refs = [r.strip() for r in heads_out.splitlines() if r.strip()]
         tag_refs = [r.strip() for r in tags_out.splitlines() if r.strip()]
@@ -253,7 +244,7 @@ class GitOperations:
 
         # Filter out remote refs that are symbolic HEADs (e.g., origin/HEAD)
         # or contain only the remote name (e.g., origin).
-        remote_names = {remote.name for remote in sub_repo.remotes}
+        remote_names = {remote.name for remote in self.repo.remotes}
         filtered_remote_refs = []
         for remote_ref in remote_refs:
             for remote_name in remote_names:
@@ -273,19 +264,15 @@ class GitOperations:
             remote_ref = rref[2]
 
             if branch_name in local_ref_set:
-                if active_branch == branch_name:
-                    active_branch = remote_name + '|' + branch_name
-                else:
-                    local_remote_refs.append(remote_name + '|' + branch_name)
+                local_remote_refs.append(remote_name + '|' + branch_name)
                 local_ref_set.remove(branch_name)
             else:
                 remaining_remote_refs.append(remote_ref)
 
-        local_refs = [ref for ref in local_refs if ref in local_ref_set and ref != active_branch]
+        local_refs = [ref for ref in local_refs if ref in local_ref_set]
 
-        # priorize tag firsts, active branch, remote ones, finally local branches
-        active_branch_refs = [active_branch] if active_branch else []
-        return tag_refs + active_branch_refs + remaining_remote_refs + local_remote_refs + local_refs
+        # priorize tag firsts, remote ones, finally local branches
+        return tag_refs + remaining_remote_refs + local_remote_refs + local_refs
 
     def get_submodules(self) -> List[Dict[str, Any]]:
         """Return a list of dictionaries describing configured submodules.
