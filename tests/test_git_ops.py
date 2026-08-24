@@ -119,7 +119,7 @@ class TestGitOps(BaseGitTest):
                     'refs/remotes/origin/HEAD', 'refs/remotes/origin/feature')
 
                 with GitOperations(repo_path) as git_ops:
-                    refs = git_ops.get_refs_containing_commit_at_path(repo_path, commit.hexsha)
+                    refs = git_ops.get_refs_containing_commit_at_path(commit.hexsha)
 
                 self.assertIn('origin|feature', refs)
                 self.assertNotIn('feature', refs)

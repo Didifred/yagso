@@ -9,7 +9,7 @@ from .submodule import SubmoduleDefinition
 class Manifest:
     """Represents the yagso.yaml manifest structure."""
     submodules: List[SubmoduleDefinition]
-    version: str = "1.0"
+    version: str = "1.1"
 
     def _collect(self, subs, root_paths) -> None:
         """Recursively collect and validate submodule root paths."""
@@ -55,7 +55,7 @@ class Manifest:
     @classmethod
     def from_dict(cls, data: dict) -> 'Manifest':
         """Create Manifest from dictionary representation."""
-        version = data.get("version", "1.0")
+        version = data.get("version", "1.1")
         submodules = [SubmoduleDefinition.from_dict(s, False) for s in data.get("submodules", [])]
 
         # Set root paths for all submodules based on their hierarchy

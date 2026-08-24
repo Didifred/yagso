@@ -63,7 +63,7 @@ class SubmoduleOrchestrator:
         manifest_path = root_path / "yagso.yaml"
         self.manifest_manager.save_manifest(manifest, manifest_path)
 
-        # Optionally generate a Bill Of Materials (BOM.yaml)
+        # Optionally generate a Bill Of Materials file (BOM.yaml)
         if create_bom:
             bom_path = root_path / "BOM.yaml"
             self.manifest_manager.save_bom(manifest, bom_path, root_path)

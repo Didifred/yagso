@@ -12,8 +12,10 @@ class SubmoduleDefinition:
     path: str
     name: Optional[str] = None
     url: Optional[str] = None
-    """ The branch to track for this submodule. Defaults to None if not specified. """
+    """ The branch to track for this submodule (.gitmodules property). Defaults to None if not specified. """
     tracking_branch: Optional[str] = None
+    """ The branch checkouted for this submodule. Defaults to None if detached HEAD. """
+    active_branch: Optional[str] = None
     """List of refs (branches/tags) that reference the recorded commit."""
     ref: Optional[List[str]] = None
     """List of files that are part of this submodule. Defaults to None if not specified."""
@@ -42,7 +44,7 @@ class SubmoduleDefinition:
             raise ValueError("Submodule commit hash cannot be empty")
 
     def to_dict(self) -> dict:
-        """Convert to dictionary representation for yaml."""
+        """Convert to dictionary representation for yaml representation."""
         result = {}
 
         if self.name:
@@ -57,6 +59,9 @@ class SubmoduleDefinition:
 
         if self.tracking_branch:
             result["tracking_branch"] = self.tracking_branch
+
+        if self.active_branch:
+            result["active_branch"] = self.active_branch
 
         if self.ref:
             result["ref"] = list(self.ref)
@@ -81,6 +86,7 @@ class SubmoduleDefinition:
             name=data.get("name"),
             url=data.get("url"),
             tracking_branch=data.get("tracking_branch"),
+            active_branch=data.get("active_branch"),
             ref=data.get("ref"),
             files=data.get("files"),
             submodules=children,

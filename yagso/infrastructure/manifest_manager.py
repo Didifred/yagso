@@ -261,7 +261,7 @@ class ManifestManager:
                 f"Unable to determine recorded commit for submodule '{name}' at path '{path}' in "
                 f"repository {repo_fs_path}")
 
-        # prepare submodule definition
+        # Prepare submodule definition
 
         # Keep `path` as declared in the submodule definition (relative to
         # that repository) — do not expand to a full relative path from the
@@ -275,19 +275,24 @@ class ManifestManager:
             tracking_branch=branch,
         )
 
-        # if we have a commit and the submodule worktree exists, try to discover refs
-        refs: List[str] = []
         child_fs_path = repo_fs_path / path
-        try:
-            if commit and child_fs_path.exists():
-                refs = git_ops.get_refs_containing_commit_at_path(child_fs_path, commit)
-        except Exception:
-            refs = []
+        with GitOperations(child_fs_path) as git_ops:
+            # Check if a branch in checkouted
+            # If head is not detached, record the active branch name as active_branch
+            if not git_ops.repo.head.is_detached:
+                sub.active_branch = git_ops.repo.active_branch.name
 
-        if refs:
-            sub.ref = refs
+            # If we have a commit and the submodule worktree exists, try to discover refs
+            refs: List[str] = []
+            try:
+                refs = git_ops.get_refs_containing_commit_at_path(commit)
+            except Exception:
+                refs = []
 
-        # recurse into the submodule folder if it exists and contains its own .gitmodules
+            if refs:
+                sub.ref = refs
+
+        # Recurse into the submodule folder that shall contains its own .gitmodules
         if child_fs_path.exists() and (child_fs_path / '.gitmodules').exists():
             child_subs = self._parse_submodule(child_fs_path, prefix_path=full_rel)
             if child_subs:
