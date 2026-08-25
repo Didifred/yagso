@@ -11,6 +11,7 @@ class Bom:
     submodules: List[SubmoduleDefinition]
     version: str = "1.0"
 
+    # dead code, but keeping for reference
     def _collect(self, subs, root_paths) -> None:
         """Recursively collect and validate submodule root paths."""
         status = None
@@ -33,6 +34,7 @@ class Bom:
 
         return status
 
+     # dead code, but keeping for reference
     def validate(self) -> None:
         """Validate manifest integrity."""
         if not self.submodules:
@@ -41,6 +43,7 @@ class Bom:
         root_paths = set()
         self._collect(self.submodules, root_paths)
 
+     # dead code, but keeping for reference
     def to_dict(self) -> dict:
         """Convert to dictionary representation for .yaml generation."""
         return {

@@ -316,7 +316,8 @@ class ManifestManager:
             self,
             repo_root: Path,
             sub_root: str,
-            child_submodules: List[SubmoduleDefinition]) -> List[str]:
+            child_submodules: List[SubmoduleDefinition],
+            files_pattern: Optional[str] = None) -> List[str]:
         """List files under a submodule filesystem path, excluding nested submodule folders and .git."""
         fs_path = repo_root / sub_root
         if not fs_path.exists() or not fs_path.is_dir():
@@ -341,11 +342,18 @@ class ManifestManager:
             if rel.name in {'.gitmodules', '.gitignore', '.gitattributes'}:
                 continue
 
-            files.append(rel.as_posix())
+            relative_path = rel.as_posix()
+            if files_pattern is None or re.search(files_pattern, relative_path):
+                files.append(relative_path)
 
         return sorted(files)
 
-    def save_bom(self, manifest: Manifest, path: Path, repo_root: Path) -> None:
+    def save_bom(
+            self,
+            manifest: Manifest,
+            path: Path,
+            repo_root: Path,
+            files_pattern: Optional[str] = None) -> None:
         """Save a Bill Of Materials (BOM.yaml) reflecting repository paths and a single preferred ref per submodule.
 
         The BOM mirrors the structure of yagso.yaml (version + submodules), but each submodule entry only keeps
@@ -364,7 +372,8 @@ class ManifestManager:
                 entry["ref"] = chosen
 
             # list files for this submodule (exclude nested submodules)
-            files = self._list_files(repo_root, sub.root_path, sub.submodules)
+            files = self._list_files(
+                repo_root, sub.root_path, sub.submodules, files_pattern=files_pattern)
             entry["files"] = files
 
             if sub.submodules:

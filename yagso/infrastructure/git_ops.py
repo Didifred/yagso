@@ -335,20 +335,6 @@ class GitOperations:
 
         return blocks
 
-    def is_git_repository(self) -> bool:
-        """Return True when `self.repo_path` is a Git repository.
-
-        Returns:
-            True if `self.repo_path` can be opened by GitPython, False
-            otherwise.
-        """
-
-        try:
-            Repo(self.repo_path)
-            return True
-        except git.InvalidGitRepositoryError:
-            return False
-
     def sync_submodule(self, submodule_def: SubmoduleDefinition, name: str) -> None:
         """Synchronize a single submodule to the given definition.
 
