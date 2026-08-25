@@ -374,7 +374,8 @@ class ManifestManager:
             # list files for this submodule (exclude nested submodules)
             files = self._list_files(
                 repo_root, sub.root_path, sub.submodules, files_pattern=files_pattern)
-            entry["files"] = files
+            if files:
+                entry["files"] = files
 
             if sub.submodules:
                 entry["submodules"] = [_conv(c) for c in sub.submodules]
