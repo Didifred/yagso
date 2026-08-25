@@ -9,47 +9,7 @@ from .submodule import SubmoduleDefinition
 class Bom:
     """Represents the BOM.yaml bill of material structure."""
     submodules: List[SubmoduleDefinition]
-    version: str = "1.0"
-
-    # dead code, but keeping for reference
-    def _collect(self, subs, root_paths) -> None:
-        """Recursively collect and validate submodule root paths."""
-        status = None
-
-        for sub in subs:
-            if not sub.path:
-                raise ValueError("Submodule path cannot be empty")
-            if not sub.commit:
-                raise ValueError("Submodule commit hash cannot be empty")
-            if not sub.root_path:
-                raise ValueError("Submodule root path cannot be empty")
-
-            if sub.root_path in root_paths:
-                raise ValueError(f"Duplicate submodule root path: {sub.root_path}")
-
-            root_paths.add(sub.root_path)
-
-            if getattr(sub, 'submodules', None):
-                status = self._collect(sub.submodules, root_paths)
-
-        return status
-
-     # dead code, but keeping for reference
-    def validate(self) -> None:
-        """Validate manifest integrity."""
-        if not self.submodules:
-            raise ValueError("Manifest must contain at least one submodule")
-
-        root_paths = set()
-        self._collect(self.submodules, root_paths)
-
-     # dead code, but keeping for reference
-    def to_dict(self) -> dict:
-        """Convert to dictionary representation for .yaml generation."""
-        return {
-            "version": self.version,
-            "submodules": [sub.to_dict() for sub in self.submodules],
-        }
+    version: str = "1.1"
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Manifest':
