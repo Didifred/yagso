@@ -14,8 +14,7 @@ if errorlevel 1 (
 )
 
 set "wheelName="
-for /f "delims=" %%W in ('dir /b /a-d /o-d "%repositoryRoot%\dist\*.whl" 2^>nul') 
-    do if not defined wheelName set "wheelName=%%W"
+for /f "delims=" %%W in ('dir /b /a-d /o-d "%repositoryRoot%\dist\*.whl" 2^>nul') do if not defined wheelName set "wheelName=%%W"
 
 if not defined wheelName (
     echo No wheel was generated in %repositoryRoot%\dist
