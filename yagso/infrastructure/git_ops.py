@@ -787,11 +787,16 @@ class GitOperations:
     def commit_all(self, message: str) -> None:
         """Commit all changes recursively, deepest submodules first."""
         try:
+            if not self.repo.head.is_detached:
+                branch = self.repo.active_branch.name
+            else:
+                RuntimeError("Please checkout a branch first in order to commit.")
+
             # Walk the whole submodule tree bottom-up
-            branch = self._commit_recursive(self.repo, message, self.repo.active_branch.name)
+            branch = self._commit_recursive(self.repo, message, branch)
 
             if self.repo.is_dirty():
-                # Checkout the main repository to a branch
+                # Checkout the repository to a branch
                 branch = self._checkout_ref_or_commit(self.repo, branch)
 
                 # Stage the top-level repo last (picks up all gitlink updates)
