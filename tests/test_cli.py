@@ -383,19 +383,23 @@ class TestCli(BaseGitTest):
         """Test that generate --BOM --files filters BOM files by regex."""
         controller = CLIController()
 
-        result = controller.run(['generate', '--BOM', '--files', r'^README\.md$'])
-
+        result = controller.run(['generate', '--BOM', '--files', r'.*\.c$'])
         self.assertEqual(result, 0)
+
         bom = ManifestManager().load_bom(Path('BOM.yaml'))
-        lib1_files = ManifestManager().get_submodule_field(bom, 'lib1', 'files')
-        self.assertEqual(lib1_files, ['README.md'])
+        self.assertEqual(
+            ManifestManager().get_submodule_field(bom, 'lib2', 'files'), ['source.c'])
+        self.assertEqual(
+            ManifestManager().get_submodule_field(bom, 'lib3/bis', 'files'), ['leaf.c'])
 
-        result = controller.run(['generate', '--BOM', '--files', r'^missing$'])
-
+        result = controller.run(['generate', '--BOM', '--files', r'.*\.h$'])
         self.assertEqual(result, 0)
+
         bom = ManifestManager().load_bom(Path('BOM.yaml'))
-        lib1_files = ManifestManager().get_submodule_field(bom, 'lib1', 'files')
-        self.assertEqual(lib1_files, [])
+        self.assertEqual(
+            ManifestManager().get_submodule_field(bom, 'lib2', 'files'), ['include.h'])
+        self.assertEqual(
+            ManifestManager().get_submodule_field(bom, 'lib3/bis', 'files'), ['leaf.h'])
 
     def test_generate_command__files_requires_bom(self):
         """Test that --files cannot be used without --BOM."""
