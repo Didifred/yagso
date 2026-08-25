@@ -64,7 +64,7 @@ pip install --force-reinstall dist/yagso-0.1.0-py3-none-any.whl
 
 - **`yagso generate`**: Generates the hierarchy of submodules from a Git root repository and produces a manifest file called `yagso.yaml` at the root of the Git repository.
 
-- **`yagso generate --BOM --files <regex>`**: Generates in addition of the maniest, a bill of material BOM.yaml with files matching regex expression.
+- **`yagso generate --BOM --files <regex>`**: Generates in addition of the maniest, a bill of material BOM.yaml with an optional regex in order to filer files.
 
 - **`yagso configure`**: Applies the manifest configuration to the repository.
 

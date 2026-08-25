@@ -379,6 +379,30 @@ class TestCli(BaseGitTest):
         # Verify that the command returns 0
         self.assertEqual(result, 0)
 
+    def test_generate_command__bom_files_filter(self):
+        """Test that generate --BOM --files filters BOM files by regex."""
+        controller = CLIController()
+
+        result = controller.run(['generate', '--BOM', '--files', r'^README\.md$'])
+
+        self.assertEqual(result, 0)
+        bom = ManifestManager().load_bom(Path('BOM.yaml'))
+        lib1_files = ManifestManager().get_submodule_field(bom, 'lib1', 'files')
+        self.assertEqual(lib1_files, ['README.md'])
+
+        result = controller.run(['generate', '--BOM', '--files', r'^missing$'])
+
+        self.assertEqual(result, 0)
+        bom = ManifestManager().load_bom(Path('BOM.yaml'))
+        lib1_files = ManifestManager().get_submodule_field(bom, 'lib1', 'files')
+        self.assertEqual(lib1_files, [])
+
+    def test_generate_command__files_requires_bom(self):
+        """Test that --files cannot be used without --BOM."""
+        result = CLIController().run(['generate', '--files', r'^README\.md$'])
+
+        self.assertEqual(result, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

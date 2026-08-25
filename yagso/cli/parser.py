@@ -28,6 +28,10 @@ class ArgumentParser:
             action="store_true",
             help="Also generate a Bill Of Materials file (BOM.yaml) listing repo paths and files"
         )
+        generate_parser.add_argument(
+            "--files",
+            help="Filter BOM files by regular expression"
+        )
 
         # update command
         update_parser = subparsers.add_parser(
@@ -94,6 +98,7 @@ class ArgumentParser:
             options["remote"] = getattr(parsed, "remote", False)
         elif parsed.command == "generate":
             options["BOM"] = getattr(parsed, "BOM", False)
+            options["files"] = getattr(parsed, "files", None)
 
         elif parsed.command == "commit":
             options["message"] = getattr(parsed, "message", "")
@@ -115,3 +120,6 @@ class ArgumentParser:
         # Command-specific validation
         if command == "commit" and not options.get("message"):
             raise ValueError("Commit message is required for commit command")
+
+        if command == "generate" and options.get("files") and not options.get("BOM"):
+            raise ValueError("--files requires --BOM")

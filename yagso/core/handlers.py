@@ -26,8 +26,10 @@ class GenerateHandler(CommandHandler):
         formatter = OutputFormatter()
         root_path = Path.cwd()
         create_bom = options.get("BOM", False)
+        files_pattern = options.get("files")
 
-        manifest = self.orchestrator.generate_manifest(root_path, create_bom=create_bom)
+        manifest = self.orchestrator.generate_manifest(
+            root_path, create_bom=create_bom, files_pattern=files_pattern)
         formatter.success(f"Generated manifest")
 
 
