@@ -349,7 +349,7 @@ class TestCli(BaseGitTest):
             manager.save_manifest(manifest, pathYaml)
 
     def test_commit_command_none(self):
-        """Test that commit command without changes returns error"""
+        """Test that commit command without changes returns information and does not fail"""
 
         # Modify yagso.yaml to add a new submodule lib4
         pathYaml = Path('yagso.yaml')
