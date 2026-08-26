@@ -16,26 +16,26 @@ from tests.common import BaseGitTest
 class TestCli(BaseGitTest):
 
     def test_controller_creation(self):
-        """Test that CLIController can be created."""
-        controller = CLIController()
+        """Test that CLIController can be created"""
+        controller = CLIController(True)
         self.assertIsNotNone(controller)
 
     def test_help_command(self):
         """Test that help command works."""
-        controller = CLIController()
+        controller = CLIController(True)
         result = controller.run(['--help'])
         # Should return 0 for help
         self.assertEqual(result, 0)
 
     def test_invalid_command(self):
-        """Test that invalid command returns error."""
-        controller = CLIController()
+        """Test that invalid command returns error"""
+        controller = CLIController(True)
         result = controller.run(['invalid'])
         self.assertEqual(result, 1)
 
     def test_generate_command(self):
-        """Test that generate command works."""
-        controller = CLIController()
+        """Test that generate command works"""
+        controller = CLIController(True)
 
         result = controller.run(['generate'])
 
@@ -71,7 +71,7 @@ class TestCli(BaseGitTest):
         self.assertEqual(result, 0)
 
     def test_generate_command__local_branches(self):
-
+        """Test that generate command and local branches are included in the manifest"""
         # Create some local branches to test
         try:
             # Checkout main
@@ -89,7 +89,7 @@ class TestCli(BaseGitTest):
         with GitOperations(Path.cwd()) as git_ops:
             git_ops.commit_all("TestCli::test_generate_command__local_branches")
 
-        controller = CLIController()
+        controller = CLIController(True)
         result = controller.run(['generate'])
 
         # Verify that un yaml file is generated and contains the local branch
@@ -110,8 +110,8 @@ class TestCli(BaseGitTest):
         self.assertEqual(result, 0)
 
     def test_configure_command(self):
-        """Test that configure command works (identity)."""
-        controller = CLIController()
+        """Test that configure command works (identity)"""
+        controller = CLIController(True)
 
         result = controller.run(['configure'])
 
@@ -119,7 +119,7 @@ class TestCli(BaseGitTest):
         self.assertEqual(result, 0)
 
     def test_configure_command_commit_change(self):
-        """Test that configure command works with commit change to develop/YAGSO."""
+        """Test that configure command works with commit change to develop/YAGSO"""
         # Modify yagso.yaml to change lib3/bis commit to develop/YAGSO
         pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
@@ -131,7 +131,7 @@ class TestCli(BaseGitTest):
         manager.save_manifest(new_manifest, pathYaml)
 
         try:
-            controller = CLIController()
+            controller = CLIController(True)
 
             result = controller.run(['configure'])
 
@@ -141,7 +141,7 @@ class TestCli(BaseGitTest):
             manager.save_manifest(manifest, pathYaml)
 
     def test_configure_command_name_change(self):
-        """Test that configure command works with name change to innerLib3Test.\n"""
+        """Test that configure command works with name change to innerLib3Test"""
         # Modify yagso.yaml to change name of lib2/lib3 repo to innerLib3Test
         pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
@@ -153,7 +153,7 @@ class TestCli(BaseGitTest):
         manager.save_manifest(new_manifest, pathYaml)
 
         try:
-            controller = CLIController()
+            controller = CLIController(True)
 
             result = controller.run(['configure'])
 
@@ -180,7 +180,7 @@ class TestCli(BaseGitTest):
         manager.save_manifest(new_manifest, pathYaml)
 
         try:
-            controller = CLIController()
+            controller = CLIController(True)
 
             result = controller.run(['configure'])
 
@@ -207,7 +207,7 @@ class TestCli(BaseGitTest):
         manager.save_manifest(new_manifest, pathYaml)
 
         try:
-            controller = CLIController()
+            controller = CLIController(True)
 
             result = controller.run(['configure'])
 
@@ -219,7 +219,7 @@ class TestCli(BaseGitTest):
             manager.save_manifest(manifest, pathYaml)
 
     def test_configure_command_add_submodule(self):
-        """Test that configure command works with adding a new submodule."""
+        """Test that configure command works with adding a new submodule"""
         # Modify yagso.yaml to add a new submodule addedsub
         pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
@@ -239,7 +239,7 @@ class TestCli(BaseGitTest):
         manager.save_manifest(new_manifest, pathYaml)
 
         try:
-            controller = CLIController()
+            controller = CLIController(True)
 
             result = controller.run(['configure'])
 
@@ -250,7 +250,7 @@ class TestCli(BaseGitTest):
             manager.save_manifest(manifest, pathYaml)
 
     def test_configure_command_add_submodule_level_1(self):
-        """Test that configure command works with adding a new submodule."""
+        """Test that configure command works with adding a new submodule"""
         # Modify yagso.yaml to add a new submodule addedsub under lib2
         pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
@@ -270,7 +270,7 @@ class TestCli(BaseGitTest):
         manager.save_manifest(new_manifest, pathYaml)
 
         try:
-            controller = CLIController()
+            controller = CLIController(True)
 
             result = controller.run(['configure'])
 
@@ -282,7 +282,7 @@ class TestCli(BaseGitTest):
             manager.save_manifest(manifest, pathYaml)
 
     def test_configure_command_add_submodule_hierarchy(self):
-        """Test that configure command works with adding a new submodule."""
+        """Test that configure command works with adding a new submodule"""
         # Modify yagso.yaml to add a new submodule addedsub
         pathYaml = Path('yagso.yaml')
         manager = ManifestManager()
@@ -302,7 +302,7 @@ class TestCli(BaseGitTest):
         manager.save_manifest(new_manifest, pathYaml)
 
         try:
-            controller = CLIController()
+            controller = CLIController(True)
 
             result = controller.run(['configure'])
 
@@ -314,7 +314,7 @@ class TestCli(BaseGitTest):
             manager.save_manifest(manifest, pathYaml)
 
     def test_commit_command_add_submodule_level_1(self):
-        """Test that commit command works."""
+        """Test that commit command works"""
 
         # Modify yagso.yaml to add a new submodule lib4
         pathYaml = Path('yagso.yaml')
@@ -335,7 +335,7 @@ class TestCli(BaseGitTest):
         manager.save_manifest(new_manifest, pathYaml)
 
         try:
-            controller = CLIController()
+            controller = CLIController(True)
 
             result = controller.run(['configure'])
             self.assertEqual(result, 0)
@@ -348,8 +348,29 @@ class TestCli(BaseGitTest):
         finally:
             manager.save_manifest(manifest, pathYaml)
 
+    def test_commit_command_none(self):
+        """Test that commit command without changes returns error"""
+
+        # Modify yagso.yaml to add a new submodule lib4
+        pathYaml = Path('yagso.yaml')
+        manager = ManifestManager()
+        manifest = manager.load_manifest(pathYaml)
+        new_manifest = copy.deepcopy(manifest)
+
+        # Write modified manifest back
+        manager.save_manifest(new_manifest, pathYaml)
+
+        try:
+            controller = CLIController(True)
+
+            result = controller.run(['commit', '--message', 'Nothing to commit'])
+
+            self.assertEqual(result, 0)
+        finally:
+            manager.save_manifest(manifest, pathYaml)
+
     def test_generate_command__bom(self):
-        """Test that generate --BOM command works."""
+        """Test that generate --BOM command works"""
         controller = CLIController()
 
         result = controller.run(['generate', '--BOM'])
@@ -380,7 +401,7 @@ class TestCli(BaseGitTest):
         self.assertEqual(result, 0)
 
     def test_generate_command__bom_files_filter(self):
-        """Test that generate --BOM --files filters BOM files by regex."""
+        """Test that generate --BOM --files filters BOM files by regex"""
         controller = CLIController()
 
         result = controller.run(['generate', '--BOM', '--files', r'.*\.c$'])

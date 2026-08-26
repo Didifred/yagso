@@ -106,14 +106,14 @@ class GitOperations:
             A ``git.Repo`` instance rooted at `self.repo_path`.
 
         Raises:
-            ValueError: if `self.repo_path` is not a valid Git repository.
+            RuntimeError: if `self.repo_path` is not a valid Git repository.
         """
 
         if self._repo is None:
             try:
                 self._repo = Repo(self.repo_path)
             except git.InvalidGitRepositoryError as e:
-                raise ValueError(f"Not a valid Git repository: {self.repo_path}") from e
+                raise RuntimeError(f"Not a valid Git repository: {self.repo_path}") from e
 
         return self._repo
 
@@ -353,7 +353,7 @@ class GitOperations:
             name: the name of the submodule to sync (used for git commands).
 
         Raises:
-            ValueError: if the submodule path does not exist in the filesystem.
+            FileNotFoundError: if the submodule path does not exist in the filesystem.
             RuntimeError: if a git operation fails while applying changes.
         """
         stage_gitmodules = False
@@ -428,7 +428,7 @@ class GitOperations:
             # compare it to the recorded gitlink before performing the checkout.
             sub_repo_path = self.repo_path / submodule_def.path
             if not sub_repo_path.exists():
-                raise ValueError(f"Submodule path does not exist: {sub_repo_path}")
+                raise FileNotFoundError(f"Submodule path does not exist: {sub_repo_path}")
 
             current_commit = self.get_recorded_commit(submodule_def.path)
             desired_ref = submodule_def.commit
@@ -744,7 +744,7 @@ class GitOperations:
 
         dest = self.repo_path / new_path
         if dest.exists():
-            raise ValueError(f"Destination path already exists: {new_path}")
+            raise FileExistsError(f"Destination path already exists: {new_path}")
 
         try:
             # Update .gitmodules to point to the new path
@@ -806,7 +806,7 @@ class GitOperations:
                 self.repo.index.commit(
                     f"bump change in {Path(self.repo.working_tree_dir).name} : {message}")
             else:
-                raise ValueError("No changes to commit")
+                raise UserWarning("No changes to commit")
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to commit changes: {e}") from e
 
