@@ -120,9 +120,6 @@ class SubmoduleOrchestrator:
         if root_path is None:
             root_path = self.repo_path
 
-        if not message:
-            raise ValueError("Commit message is required")
-
         with GitOperations(root_path) as git_ops:
             git_ops.commit_all(message)
 

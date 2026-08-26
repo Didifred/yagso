@@ -54,6 +54,11 @@ class CLIController:
 
             return self.SUCCESS
 
+        except Warning as e:
+            # Warning-level conditions are informational and should not fail the CLI.
+            self.formatter.info(str(e))
+            return self.SUCCESS
+
         except Exception as e:
             # Catch all exceptions at the CLI boundary (catch late principle)
             self.formatter.error(str(e))

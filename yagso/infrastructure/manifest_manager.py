@@ -28,14 +28,14 @@ class ManifestManager:
             field_value: The new value for the field
 
         Raises:
-            ValueError: Submodule not found with the specified root_path
+            FileNotFoundError: Submodule not found with the specified root_path
             ValueError: Invalid field name for SubmoduleDefinition
 
         """
         submodule = self._find_submodule_by_root_path(manifest.submodules, root_path)
 
         if not submodule:
-            raise ValueError(f"Submodule not found with root_path: {root_path}")
+            raise FileNotFoundError(f"Submodule not found with root_path: {root_path}")
 
         if not hasattr(submodule, field_name):
             raise ValueError(
@@ -429,7 +429,7 @@ class ManifestManager:
             field_name (str): The field name to retrieve (e.g., 'commit', 'url', 'tracking_branch')
 
         Raises:
-            ValueError: Submodule not found with the specified root_path
+            FileNotFoundError: Submodule not found with the specified root_path
             ValueError: Invalid field name for SubmoduleDefinition
 
         Returns:
@@ -438,7 +438,7 @@ class ManifestManager:
         submodule = self._find_submodule_by_root_path(bom.submodules, root_path)
 
         if not submodule:
-            raise ValueError(f"Submodule not found with root_path: {root_path}")
+            raise FileNotFoundError(f"Submodule not found with root_path: {root_path}")
 
         if not hasattr(submodule, field_name):
             raise ValueError(
