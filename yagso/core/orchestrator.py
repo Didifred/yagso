@@ -10,6 +10,7 @@ from ..domain.manifest import Manifest
 from ..domain.submodule import SubmoduleDefinition
 from ..infrastructure.git_ops import GitOperations
 from ..infrastructure.manifest_manager import ManifestManager
+from ..cli.formatter import OutputFormatter
 
 
 class DiffStatus(Enum):
@@ -30,10 +31,11 @@ class SearchResult:
 class SubmoduleOrchestrator:
     """High-level coordination of submodule operations."""
 
-    def __init__(self, repo_path: Path):
+    def __init__(self, repo_path: Path, formater: OutputFormatter = None):
         """Initialize with repository path."""
         self.repo_path = repo_path
         self.manifest_manager = ManifestManager()
+        self.formater = formater
 
     def generate_manifest(
             self,
@@ -83,7 +85,8 @@ class SubmoduleOrchestrator:
         with GitOperations(root_path) as git_ops:
             git_ops.update_all_submodules(options)
 
-    def configure_repository(self, root_path: Optional[Path] = None) -> None:
+    def configure_repository(
+            self, root_path: Optional[Path] = None) -> None:
         """Applies the manifest configuration to synchronize the repository's submodules.
 
         This method loads the manifest file (yagso.yaml) from the specified root path,
@@ -112,7 +115,8 @@ class SubmoduleOrchestrator:
         manifest.validate()
 
         # Sync submodules with manifest configuration (e.g., .gitmodules, .git/config)
-        self._sync_submodules(root_path, manifest)
+        total = self._count_submodules(manifest.submodules)
+        self._sync_submodules(root_path, manifest, total)
 
     def commit_changes(self, message: str, root_path: Optional[Path] = None) -> None:
         """Commit all changes recursively."""
@@ -123,17 +127,27 @@ class SubmoduleOrchestrator:
         with GitOperations(root_path) as git_ops:
             git_ops.commit_all(message)
 
-    def _sync_submodules(self, root_path, manifest: Manifest) -> None:
+    def _sync_submodules(
+            self,
+            root_path,
+            manifest: Manifest,
+            total: int = 0) -> None:
         """Sync submodules with manifest. """
 
         submodules = manifest.submodules
 
-        self._sync_child_submodules(root_path, submodules)
+        self._sync_child_submodules(root_path, submodules, total=total)
 
     def _sync_child_submodules(
             self,
             root_path: Path,
-            submodules: List[SubmoduleDefinition]) -> None:
+            submodules: List[SubmoduleDefinition],
+            total: int = 0,
+            current: Optional[List[int]] = None) -> None:
+        """Recursively sync child submodules with manifest."""
+
+        if current is None:
+            current = [0]
         childs = []
 
         with GitOperations(root_path) as git_ops:
@@ -153,13 +167,23 @@ class SubmoduleOrchestrator:
                 if submodule.submodules:
                     childs.append(submodule)
 
+                current[0] += 1
+
+                self.formater.progress(
+                    current[0], total, f"Configuring {submodule.root_path}")
+
             # Remaining blocks that were not matched are removed submodules
             for block in blocks:
                 git_ops.remove_submodule(block)
 
             for submodule in childs:
                 new_root = root_path / Path(submodule.root_path)
-                self._sync_child_submodules(new_root, submodule.submodules)
+                self._sync_child_submodules(
+                    new_root, submodule.submodules, total, current)
+
+    def _count_submodules(self, submodules: List[SubmoduleDefinition]) -> int:
+        """Count all submodules in a manifest, including nested definitions."""
+        return sum(1 + self._count_submodules(submodule.submodules) for submodule in submodules)
 
     def _search_submodule(self, submodule: SubmoduleDefinition, blocks: list) -> SearchResult:
         """Search for a submodule by path/url in the manifest submodule blocks and determine its

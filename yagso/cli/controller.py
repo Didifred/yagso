@@ -46,7 +46,7 @@ class CLIController:
                 return self.FAILURE
 
             # Create orchestrator and handler
-            orchestrator = SubmoduleOrchestrator(repo_path)
+            orchestrator = SubmoduleOrchestrator(repo_path, self.formatter)
             handler = self._create_handler(options["command"], orchestrator)
 
             # Execute command
