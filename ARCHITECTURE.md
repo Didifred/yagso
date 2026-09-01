@@ -40,7 +40,7 @@ YAGSO (Yet Another Git Submodule Orchestrator) is a CLI tool for managing Git su
 
 #### `OutputFormatter`
 - **Responsibility**: Format and display results to user
-- **Dependencies**: None
+- **Dependencies**: `rich.console.Console`
 - **Methods**:
   - `success(message)`
   - `error(message)`
