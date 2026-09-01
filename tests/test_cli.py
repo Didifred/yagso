@@ -5,12 +5,34 @@ import copy
 from io import StringIO
 from pathlib import Path
 from git import Repo
+from rich.console import Console
 
+from yagso.cli.formatter import OutputFormatter
 from yagso.infrastructure.git_ops import GitOperations
 from yagso.cli.controller import CLIController
 from yagso.infrastructure.manifest_manager import ManifestManager
 from yagso.domain.submodule import SubmoduleDefinition
 from tests.common import BaseGitTest
+
+
+class TestFormatter(unittest.TestCase):
+
+    def test_output_formatter_apis_use_rich_console(self):
+        """The formatter exposes the expected Rich-backed output APIs."""
+        stream = StringIO()
+        console = Console(file=stream, force_terminal=False, color_system=None)
+        formatter = OutputFormatter(console=console)
+
+        formatter.success("Saved")
+        formatter.info("Ready")
+        formatter.error("Failed")
+        formatter.progress(2, 3, "Syncing")
+
+        output = stream.getvalue()
+        self.assertIn("Saved", output)
+        self.assertIn("Ready", output)
+        self.assertIn("Failed", output)
+        self.assertIn("Syncing", output)
 
 
 class TestCli(BaseGitTest):
