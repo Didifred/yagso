@@ -4,6 +4,10 @@
 class OutputFormatter:
     """Format and display results to user."""
 
+    PROGRESS_WIDTH = 30
+    GREEN = "\033[32m"
+    RESET = "\033[0m"
+
     def success(self, message: str) -> None:
         """Display success message."""
         print(f"✓ {message}")
@@ -17,26 +21,15 @@ class OutputFormatter:
         print(f"ℹ {message}")
 
     def progress(self, current: int, total: int, message: str) -> None:
-        """Display progress message."""
-        percentage = int((current / total) * 100) if total > 0 else 0
-        print(f"[{current}/{total}] {percentage}% {message}")
-
-    def list_items(self, items: list, title: str = "") -> None:
-        """Display a list of items."""
-        if title:
-            print(f"\n{title}:")
-        for item in items:
-            print(f"  • {item}")
-
-    def show_summary(self, data: dict) -> None:
-        """Display a summary of operations."""
-        print("\nSummary:")
-        for key, value in data.items():
-            if isinstance(value, list):
-                print(f"  {key}: {len(value)} items")
-                for item in value[:5]:  # Show first 5 items
-                    print(f"    • {item}")
-                if len(value) > 5:
-                    print(f"    ... and {len(value) - 5} more")
-            else:
-                print(f"  {key}: {value}")
+        """Display a pip-style colored progress bar."""
+        percentage = min(100, int((current / total) * 100)) if total > 0 else 0
+        completed = int(self.PROGRESS_WIDTH * percentage / 100)
+        bar = "=" * max(0, completed - 1) + (">" if completed else "")
+        bar = bar.ljust(self.PROGRESS_WIDTH, " ")
+        print(
+            f"\r{self.GREEN}[{bar}]{self.RESET} {percentage:3d}% {message}",
+            end="",
+            flush=True,
+        )
+        if current >= total:
+            print()

@@ -18,48 +18,54 @@ class CommandHandler(ABC):
         """Execute the command with given options."""
         raise NotImplementedError()
 
+    def get_formatter(self) -> OutputFormatter:
+        """Get the output formatter from the orchestrator."""
+        return self.orchestrator.formater
+
 
 class GenerateHandler(CommandHandler):
     """Handler for 'generate' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        formatter = OutputFormatter()
         root_path = Path.cwd()
         create_bom = options.get("BOM", False)
         files_pattern = options.get("files")
 
         manifest = self.orchestrator.generate_manifest(
-            root_path, create_bom=create_bom, files_pattern=files_pattern)
-        formatter.success(f"Generated manifest")
+            root_path,
+            create_bom=create_bom,
+            files_pattern=files_pattern,
+        )
+        self.get_formatter().success(f"Manifest generated completely")
 
 
 class UpdateHandler(CommandHandler):
     """Handler for 'update' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        formatter = OutputFormatter()
+
         root_path = Path.cwd()
 
         self.orchestrator.update_submodules(options, root_path)
 
         init_msg = " and initialized" if options.get("init", False) else ""
         remote_msg = " from remote" if options.get("remote", False) else ""
-        formatter.success(f"Updated submodules{init_msg}{remote_msg}")
+        self.get_formatter().success(f"Updated submodules{init_msg}{remote_msg}")
 
 
 class ConfigureHandler(CommandHandler):
     """Handler for 'configure' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        formatter = OutputFormatter()
         root_path = Path.cwd()
 
         self.orchestrator.configure_repository(root_path)
 
         # Regenerate the manifest after configuration to reflect any changes made during the process
-        manifest = self.orchestrator.generate_manifest(root_path, False)
+        manifest = self.orchestrator.generate_manifest(
+            root_path, False)
 
-        formatter.success(f"Repository configured according to manifest")
+        self.get_formatter().success(f"Repository configured according to manifest")
 
 
 class CommitHandler(CommandHandler):
@@ -74,7 +80,7 @@ class CommitHandler(CommandHandler):
             raise ValueError("Commit message is required")
 
         self.orchestrator.commit_changes(message, root_path)
-        formatter.success(f"Committed changes: {message}")
+        self.get_formatter().success(f"Committed changes: {message}")
 
 
 class PushHandler(CommandHandler):
@@ -84,7 +90,7 @@ class PushHandler(CommandHandler):
         formatter = OutputFormatter()
 
         self.orchestrator.push_changes()
-        formatter.success("Pushed all changes to remote")
+        self.get_formatter().success("Pushed all changes to remote")
 
 
 __all__ = [
