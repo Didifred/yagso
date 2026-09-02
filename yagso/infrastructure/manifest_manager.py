@@ -9,13 +9,16 @@ from .git_ops import GitOperations
 from ..domain.manifest import Manifest
 from ..domain.bom import Bom
 from ..domain.submodule import SubmoduleDefinition
+from ..cli.formatter import OutputFormatter
 
 
 class ManifestManager:
     """Handles reading/writing manifest files using Python's native file operations."""
 
-    def __init__(self):
-        pass
+    def __init__(self, formater: OutputFormatter):
+        self.formater = formater
+        self.progress_current = 0
+        self.progress_total = 0
 
     def update_submodule_field(self, manifest: Manifest, root_path: str, field_name: str,
                                field_value) -> None:
@@ -172,6 +175,9 @@ class ManifestManager:
             raise FileNotFoundError(
                 f"No .gitmodules file found in {root_path}")
 
+        # TODO : user progress bar to show progress of submodule parsing,
+        self.progress_total = 1
+        self.progress_current = 0
         submodules = self._parse_submodule(root_path, prefix_path=Path(""))
 
         if not submodules:
@@ -196,10 +202,13 @@ class ManifestManager:
 
         with GitOperations(repo_fs_path) as git_ops:
             blocks = git_ops.read_gitmodules_blocks()
+            # TODO : increment total progress count
 
             results = []
             for block in blocks:
+
                 sub = self._build_submodule_from_block(block, repo_fs_path, prefix_path, git_ops)
+                # TODO : increment current progress count and update progress bar
                 results.append(sub)
 
         return results

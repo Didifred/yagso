@@ -43,7 +43,6 @@ class UpdateHandler(CommandHandler):
     """Handler for 'update' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-
         root_path = Path.cwd()
 
         self.orchestrator.update_submodules(options, root_path)
@@ -72,7 +71,6 @@ class CommitHandler(CommandHandler):
     """Handler for 'commit' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        formatter = OutputFormatter()
         root_path = Path.cwd()
 
         message = options.get("message", "")
@@ -87,7 +85,6 @@ class PushHandler(CommandHandler):
     """Handler for 'push' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-        formatter = OutputFormatter()
 
         self.orchestrator.push_changes()
         self.get_formatter().success("Pushed all changes to remote")
