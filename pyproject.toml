@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yagso"
-version = "0.1.1"
+version = "0.1.2"
 description = "CLI tool that manages Git submodule hierarchies via a YAML manifest"
 authors = [{name = "Freddy Boutin", email = "didifred.web@gmail.com"}]
 requires-python = ">=3.8"
@@ -19,6 +19,7 @@ yagso = "yagso.cli.__main__:main"
 
 [project.optional-dependencies]
 dev = [
+    "autopep8",
     "pytest",
     "coverage",
     "pygount",

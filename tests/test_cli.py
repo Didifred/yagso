@@ -4,6 +4,7 @@ import yaml
 import copy
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 from git import Repo
 from rich.console import Console
 
@@ -20,13 +21,15 @@ class TestFormatter(unittest.TestCase):
     def test_output_formatter_apis_use_rich_console(self):
         """The formatter exposes the expected Rich-backed output APIs."""
         stream = StringIO()
-        console = Console(file=stream, force_terminal=False, color_system=None)
-        formatter = OutputFormatter(console=console)
+        console = Console(file=stream, color_system=None, force_terminal=True)
 
-        formatter.success("Saved")
-        formatter.info("Ready")
-        formatter.error("Failed")
-        formatter.progress(2, 3, "Syncing")
+        with patch("yagso.cli.formatter.Console", return_value=console):
+            formatter = OutputFormatter()
+
+            formatter.success("Saved")
+            formatter.info("Ready")
+            formatter.error("Failed")
+            formatter.progress(2, 3, "Syncing")
 
         output = stream.getvalue()
         self.assertIn("Saved", output)

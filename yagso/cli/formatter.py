@@ -11,9 +11,9 @@ class OutputFormatter:
 
     PROGRESS_WIDTH = 30
 
-    def __init__(self, console: Optional[Console] = None):
+    def __init__(self):
         """Create a formatter bound to a Rich console."""
-        self._console = console or Console()
+        self._console = Console()
         self._progress = None
         self._task_id = None
 

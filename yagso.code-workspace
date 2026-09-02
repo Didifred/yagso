@@ -15,6 +15,7 @@
             "-p",
             "test_*.py"
         ],
-        "python.testing.autoTestDiscoverOnSaveEnabled": true
+        "python.testing.autoTestDiscoverOnSaveEnabled": true,
+        "chat.newSession.defaultMode": "yagso"
     }
 }

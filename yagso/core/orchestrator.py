@@ -34,7 +34,7 @@ class SubmoduleOrchestrator:
     def __init__(self, repo_path: Path, formater: OutputFormatter = None):
         """Initialize with repository path."""
         self.repo_path = repo_path
-        self.manifest_manager = ManifestManager()
+        self.manifest_manager = ManifestManager(formater)
         self.formater = formater
 
     def generate_manifest(
@@ -115,8 +115,9 @@ class SubmoduleOrchestrator:
         manifest.validate()
 
         # Sync submodules with manifest configuration (e.g., .gitmodules, .git/config)
-        total = self._count_submodules(manifest.submodules)
-        self._sync_submodules(root_path, manifest, total)
+        self.manifest_manager.progress_total = self._count_submodules(manifest.submodules)
+        self.manifest_manager.progress_current = 0
+        self._sync_submodules(root_path, manifest)
 
     def commit_changes(self, message: str, root_path: Optional[Path] = None) -> None:
         """Commit all changes recursively."""
@@ -130,24 +131,19 @@ class SubmoduleOrchestrator:
     def _sync_submodules(
             self,
             root_path,
-            manifest: Manifest,
-            total: int = 0) -> None:
+            manifest: Manifest) -> None:
         """Sync submodules with manifest. """
 
         submodules = manifest.submodules
 
-        self._sync_child_submodules(root_path, submodules, total=total)
+        self._sync_child_submodules(root_path, submodules)
 
     def _sync_child_submodules(
             self,
             root_path: Path,
-            submodules: List[SubmoduleDefinition],
-            total: int = 0,
-            current: Optional[List[int]] = None) -> None:
+            submodules: List[SubmoduleDefinition]) -> None:
         """Recursively sync child submodules with manifest."""
 
-        if current is None:
-            current = [0]
         childs = []
 
         with GitOperations(root_path) as git_ops:
@@ -167,10 +163,13 @@ class SubmoduleOrchestrator:
                 if submodule.submodules:
                     childs.append(submodule)
 
-                current[0] += 1
+                self.manifest_manager.progress_current += 1
 
+                progress_message = f"Configuring {submodule.root_path}"
                 self.formater.progress(
-                    current[0], total, f"Configuring {submodule.root_path}")
+                    self.manifest_manager.progress_current,
+                    self.manifest_manager.progress_total,
+                    progress_message)
 
             # Remaining blocks that were not matched are removed submodules
             for block in blocks:
@@ -179,7 +178,7 @@ class SubmoduleOrchestrator:
             for submodule in childs:
                 new_root = root_path / Path(submodule.root_path)
                 self._sync_child_submodules(
-                    new_root, submodule.submodules, total, current)
+                    new_root, submodule.submodules)
 
     def _count_submodules(self, submodules: List[SubmoduleDefinition]) -> int:
         """Count all submodules in a manifest, including nested definitions."""
