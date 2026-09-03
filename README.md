@@ -51,6 +51,9 @@ Install the package using pip:
 pip install --force-reinstall dist/yagso-0.1.0-py3-none-any.whl
 ```
 
+On linux, like pip warns, you may need to add to path the local bin path, for example : export PATH="$PATH:/home/$(USER)/.local/bin"
+
+
 ## Development
 
 1. Clone the repository and open worspace in VS Code.
