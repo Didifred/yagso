@@ -41,18 +41,20 @@ To build the Python package, ensure you have Python 3.8+ installed and follow th
    ```
 
 This will create distribution files in the `dist/` directory:
-- `yagso-0.1.0.tar.gz` (source distribution)
-- `yagso-0.1.0-py3-none-any.whl` (wheel)
+- `yagso-0.1.2.tar.gz` (source distribution)
+- `yagso-0.1.2-py3-none-any.whl` (wheel)
 
 ## Installation
 
 Install the package using pip:
 ```bash
-pip install --force-reinstall dist/yagso-0.1.0-py3-none-any.whl
+pip install --force-reinstall dist/yagso-0.1.2-py3-none-any.whl
 ```
 
-On linux, like pip warns, you may need to add to path the local bin path, for example : export PATH="$PATH:/home/$(USER)/.local/bin"
-
+- On linux, like pip warns, you may need to add to path the local bin path, for example : 
+```bash
+export PATH="$PATH:/home/$(USER)/.local/bin"
+```
 
 ## Development
 
