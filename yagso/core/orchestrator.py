@@ -10,7 +10,6 @@ from ..domain.manifest import Manifest
 from ..domain.submodule import SubmoduleDefinition
 from ..infrastructure.git_ops import GitOperations
 from ..infrastructure.manifest_manager import ManifestManager
-from ..cli.formatter import OutputFormatter
 
 
 class DiffStatus(Enum):
@@ -31,11 +30,10 @@ class SearchResult:
 class SubmoduleOrchestrator:
     """High-level coordination of submodule operations."""
 
-    def __init__(self, repo_path: Path, formater: OutputFormatter = None):
+    def __init__(self, repo_path: Path):
         """Initialize with repository path."""
         self.repo_path = repo_path
-        self.manifest_manager = ManifestManager(formater)
-        self.formater = formater
+        self.manifest_manager = ManifestManager()
 
     def generate_manifest(
             self,

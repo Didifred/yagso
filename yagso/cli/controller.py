@@ -23,7 +23,6 @@ class CLIController:
 
     def __init__(self, debug: bool = False):
         self.parser = ArgumentParser()
-        self.formatter = OutputFormatter()
         self.debug = debug  # Set to True to enable debug output
 
     def run(self, args: list) -> int:
@@ -42,11 +41,11 @@ class CLIController:
 
             # Check if it's a git repository
             if not (repo_path / ".git").exists():
-                self.formatter.error(f"Not a Git repository: {repo_path}")
+                OutputFormatter.instance().error(f"Not a Git repository: {repo_path}")
                 return self.FAILURE
 
             # Create orchestrator and handler
-            orchestrator = SubmoduleOrchestrator(repo_path, self.formatter)
+            orchestrator = SubmoduleOrchestrator(repo_path)
             handler = self._create_handler(options["command"], orchestrator)
 
             # Execute command
@@ -56,14 +55,14 @@ class CLIController:
 
         except Warning as e:
             # Warning-level conditions are informational and should not fail the CLI.
-            self.formatter.info(str(e))
+            OutputFormatter.instance().info(str(e))
             return self.SUCCESS
 
         except Exception as e:
             # Catch all exceptions at the CLI boundary (catch late principle)
-            self.formatter.error(str(e))
+            OutputFormatter.instance().error(str(e))
             if self.debug:
-                self.formatter.error(traceback.format_exc())
+                OutputFormatter.instance().error(traceback.format_exc())
             return self.FAILURE
 
     def _create_handler(self, command: str, orchestrator: SubmoduleOrchestrator):

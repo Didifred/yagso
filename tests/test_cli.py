@@ -18,6 +18,10 @@ from tests.common import BaseGitTest
 
 class TestFormatter(unittest.TestCase):
 
+    def test_instance_returns_same_formatter(self):
+        """The formatter getter returns one shared instance."""
+        self.assertIs(OutputFormatter.instance(), OutputFormatter.instance())
+
     def test_output_formatter_apis_use_rich_console(self):
         """The formatter exposes the expected Rich-backed output APIs."""
         stream = StringIO()

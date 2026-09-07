@@ -10,6 +10,14 @@ class OutputFormatter:
     """Format and display results to user using Rich."""
 
     PROGRESS_WIDTH = 30
+    _instance = None
+
+    @classmethod
+    def instance(cls) -> "OutputFormatter":
+        """Return the process-wide output formatter instance."""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
     def __init__(self):
         """Create a formatter bound to a Rich console."""

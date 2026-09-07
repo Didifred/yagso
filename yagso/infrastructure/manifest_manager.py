@@ -15,8 +15,7 @@ from ..cli.formatter import OutputFormatter
 class ManifestManager:
     """Handles reading/writing manifest files using Python's native file operations."""
 
-    def __init__(self, formater: OutputFormatter):
-        self.formater = formater
+    def __init__(self):
         self.progress_current = 0
         self.progress_total = 0
 
