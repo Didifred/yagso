@@ -10,6 +10,7 @@ from ..domain.manifest import Manifest
 from ..domain.submodule import SubmoduleDefinition
 from ..infrastructure.git_ops import GitOperations
 from ..infrastructure.manifest_manager import ManifestManager
+from ..cli.formatter import OutputFormatter
 
 
 class DiffStatus(Enum):
@@ -164,7 +165,7 @@ class SubmoduleOrchestrator:
                 self.manifest_manager.progress_current += 1
 
                 progress_message = f"Configuring {submodule.root_path}"
-                self.formater.progress(
+                OutputFormatter.instance().progress(
                     self.manifest_manager.progress_current,
                     self.manifest_manager.progress_total,
                     progress_message)
