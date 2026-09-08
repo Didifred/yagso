@@ -65,8 +65,10 @@ class GitOperations:
             head1 = g.ls_remote(url1, 'HEAD').split()[0]
             head2 = g.ls_remote(url2, 'HEAD').split()[0]
             return head1 == head2
-        except BaseException:
-            return False
+        except BaseException as e:
+            raise IOError(f"Invalid repository url : {e}") from e
+
+        return False
 
     # Helper to compare short/long SHA forms
     def sha_equal(a: Optional[str], b: Optional[str]) -> bool:

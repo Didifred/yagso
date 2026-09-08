@@ -196,6 +196,7 @@ class SubmoduleOrchestrator:
         """
 
         git_name = ""
+        status = DiffStatus.ADDED  # Default to added if not found
 
         for block in blocks:
             if block.get("path") == submodule.path:
@@ -205,25 +206,31 @@ class SubmoduleOrchestrator:
                             and (git_name == submodule.name) \
                             and (block.get("branch") == submodule.tracking_branch):
                         blocks.remove(block)
+                        status = DiffStatus.UNCHANGED
                         return SearchResult(DiffStatus.UNCHANGED, git_name)
                     else:
                         blocks.remove(block)
-                        return SearchResult(DiffStatus.MODIFIED, git_name)
+                        status = DiffStatus.MODIFIED
                 else:
                     # URL change but same repo (eg ssh <-> https)
                     if GitOperations.is_same_repo(block.get("url", ""), submodule.url):
                         blocks.remove(block)
-                        return SearchResult(DiffStatus.MODIFIED, git_name)
+                        status = DiffStatus.MODIFIED
+                    else:
+                        status = DiffStatus.ADDED
+                        git_name = submodule.name
             else:
                 # Check if same url but different path (moved)
                 if (block.get("url") == submodule.url) \
                         and (block.get("commit") == submodule.commit) \
                         and (git_name == submodule.name):
                     blocks.remove(block)
-                    return SearchResult(DiffStatus.MOVED, git_name)
+                    status = DiffStatus.MOVED
+                else:
+                    status = DiffStatus.ADDED
+                    git_name = submodule.name
 
-        # Otherwise, it's considerated as an added submodule
-        return SearchResult(DiffStatus.ADDED, submodule.name)
+        return SearchResult(status, git_name)
 
     def push_changes(self) -> None:
         """Push all commits to remote."""

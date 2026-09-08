@@ -41,6 +41,29 @@ class TestFormatter(unittest.TestCase):
         self.assertIn("Failed", output)
         self.assertIn("Syncing", output)
 
+    def test_error_stops_progress_and_uses_red(self):
+        """An error stops active progress and is rendered in red."""
+        stream = StringIO()
+        console = Console(file=stream, color_system="standard", force_terminal=True)
+
+        with patch("yagso.cli.formatter.Console", return_value=console):
+            formatter = OutputFormatter()
+            formatter.progress(1, 2, "Syncing")
+            progress = formatter._progress
+            bar_column = formatter._bar_column
+
+            with patch.object(progress, "stop", wraps=progress.stop) as stop:
+                formatter.error("Failed")
+
+        stop.assert_called_once_with()
+        self.assertEqual(bar_column.style, "red")
+        self.assertEqual(bar_column.complete_style, "red")
+        self.assertEqual(bar_column.finished_style, "red")
+        self.assertIsNone(formatter._progress)
+        self.assertIsNone(formatter._task_id)
+        self.assertIn("\x1b[31m", stream.getvalue())
+        self.assertIn("Failed", stream.getvalue())
+
 
 class TestCli(BaseGitTest):
 
@@ -215,6 +238,33 @@ class TestCli(BaseGitTest):
 
             # Verify that lib1 url change to ssh url and that the command returns 0
             self.assertEqual(result, 0)
+
+        finally:
+            manager.save_manifest(manifest, pathYaml)
+
+    def test_configure_command_bad_url_change(self):
+        """Test that configure command failed with wrong url change"""
+        # Modify yagso.yaml to change lib1 url to ssh
+        pathYaml = Path('yagso.yaml')
+        manager = ManifestManager()
+        manifest = manager.load_manifest(pathYaml)
+        new_manifest = copy.deepcopy(manifest)
+        manager.update_submodule_field(
+            new_manifest,
+            'lib2',
+            'url',
+            'https://github.com/Didifred/yagso_test_oups.git')
+
+        # Write modified manifest back
+        manager.save_manifest(new_manifest, pathYaml)
+
+        try:
+            controller = CLIController(True)
+
+            result = controller.run(['configure'])
+
+            # Verify that command fails and that the command returns 1
+            self.assertEqual(result, 1)
 
         finally:
             manager.save_manifest(manifest, pathYaml)

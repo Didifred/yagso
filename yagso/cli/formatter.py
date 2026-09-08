@@ -24,6 +24,7 @@ class OutputFormatter:
         self._console = Console()
         self._progress = None
         self._task_id = None
+        self._bar_column = None
 
     def success(self, message: str) -> None:
         """Display a success message."""
@@ -31,6 +32,14 @@ class OutputFormatter:
 
     def error(self, message: str) -> None:
         """Display an error message."""
+        if self._progress is not None:
+            self._bar_column.style = "bar.back"
+            self._bar_column.complete_style = "red"
+            self._bar_column.finished_style = "red"
+            self._progress.stop()
+            self._progress = None
+            self._task_id = None
+            self._bar_column = None
         self._console.print(f"[red]✗ Error:[/red] {message}")
 
     def info(self, message: str) -> None:
@@ -40,12 +49,13 @@ class OutputFormatter:
     def progress(self, current: int, total: int, message: str) -> None:
         """Display a Rich-based progress bar."""
         if self._progress is None:
+            self._bar_column = BarColumn(
+                bar_width=self.PROGRESS_WIDTH,
+                style="bar.back",
+                complete_style="green",
+                finished_style="green")
             self._progress = Progress(
-                BarColumn(
-                    bar_width=self.PROGRESS_WIDTH,
-                    style="bar.back",
-                    complete_style="green",
-                    finished_style="green"),
+                self._bar_column,
                 TaskProgressColumn(),
                 TextColumn("|"),
                 TextColumn("[dim]{task.description}[/dim]"),
@@ -61,3 +71,4 @@ class OutputFormatter:
             self._progress.stop()
             self._progress = None
             self._task_id = None
+            self._bar_column = None
