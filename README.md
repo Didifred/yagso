@@ -64,7 +64,11 @@ export PATH="$PATH:/home/$(USER)/.local/bin"
    ```bash
    python -m venv .venv
    ```
-3. Install dependencies in editable mode for development:
+3. Activate the virtual environment:
+   - On Windows: `.venv\Scripts\activate`
+   - On macOS/Linux: `source .venv/bin/activate`
+
+4. Install dependencies in editable mode for development:
    ```bash
    pip install -e .
    ```
