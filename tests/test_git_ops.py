@@ -174,10 +174,9 @@ class TestGitOps(BaseGitTest):
                 with GitOperations(repo_path) as ops:
                     ops._checkout_ref_or_commit(repo, 'default')
 
-                # After the helper, we should be on branch main
+                # After the helper, we should be on the repository's default branch.
                 self.assertFalse(repo.head.is_detached)
-                branch_name = f"main"
-                self.assertIn(branch_name, [b.name for b in repo.branches])
+                self.assertIn(repo.active_branch.name, ('main', 'master'))
                 self.assertEqual(repo.head.commit.hexsha, commit.hexsha)
 
                 (repo_path / 'README.md').write_text('hello again\n', encoding='utf-8')
