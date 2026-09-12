@@ -106,7 +106,7 @@ class GitOperations:
 
     # Helper to compare short/long SHA forms
     @staticmethod
-    def sha_equal(a: Optional[str], b: Optional[str]) -> bool:
+    def _sha_equal(a: Optional[str], b: Optional[str]) -> bool:
         """Return True when two commit-ish strings refer to the same commit.
 
         Accepts full or abbreviated commit SHAs (or tags/refs that have been
@@ -129,6 +129,14 @@ class GitOperations:
         a = a.strip()
         b = b.strip()
         return a == b or a.startswith(b) or b.startswith(a)
+
+    @staticmethod
+    def _strip_ref_prefix(ref: str) -> str:
+        _PREFIXES = ("refs/heads/", "refs/tags/", "refs/remotes/")
+        for prefix in _PREFIXES:
+            if ref.startswith(prefix):
+                return ref[len(prefix):]
+        return ref
 
     def __init__(self, repo_path: Path):
         """Initialize with repository path."""
@@ -442,7 +450,11 @@ class GitOperations:
             # Update tracking branch if it differs
             try:
                 reader = submodule.config_reader()
-                current_branch = reader.get_value('branch')
+                current_branch_ref = reader.get_value('branch')
+                if current_branch_ref:
+                    current_branch = GitOperations._strip_ref_prefix(current_branch_ref)
+                else:
+                    current_branch = None
             except Exception:
                 current_branch = None
 
@@ -490,7 +502,7 @@ class GitOperations:
                             f"Failed to resolve sha of {desired_ref} in submodule "
                             f"{submodule_def.name}") from e
 
-                if not GitOperations.sha_equal(current_commit, resolved_sha):
+                if not GitOperations._sha_equal(current_commit, resolved_sha):
                     try:
                         if resolved_from_origin:
                             # Create a new local branch tracking origin

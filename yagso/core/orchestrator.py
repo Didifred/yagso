@@ -150,6 +150,14 @@ class SubmoduleOrchestrator:
                 #  Find suitable operation sync, add , based on manifest vs current state
                 search_result = self._search_submodule(submodule, blocks)
 
+                self.manifest_manager.progress_current += 1
+
+                progress_message = f"Configuring {submodule.root_path}"
+                OutputFormatter.instance().progress(
+                    self.manifest_manager.progress_current,
+                    self.manifest_manager.progress_total,
+                    progress_message)
+
                 if search_result.status == DiffStatus.MODIFIED:
                     git_ops.sync_submodule(submodule, search_result.name)
                 elif search_result.status == DiffStatus.MOVED:
@@ -159,14 +167,7 @@ class SubmoduleOrchestrator:
 
                 if submodule.submodules:
                     childs.append(submodule)
-
-                self.manifest_manager.progress_current += 1
-
-                progress_message = f"Configuring {submodule.root_path}"
-                OutputFormatter.instance().progress(
-                    self.manifest_manager.progress_current,
-                    self.manifest_manager.progress_total,
-                    progress_message)
+            # end for submodule in submodules
 
             # Remaining blocks that were not matched are removed submodules
             for block in blocks:
