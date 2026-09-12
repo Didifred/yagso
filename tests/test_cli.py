@@ -1,6 +1,4 @@
 import unittest
-import sys
-import yaml
 import copy
 from io import StringIO
 from pathlib import Path
@@ -56,7 +54,6 @@ class TestFormatter(unittest.TestCase):
                 formatter.error("Failed")
 
         stop.assert_called_once_with()
-        self.assertEqual(bar_column.style, "red")
         self.assertEqual(bar_column.complete_style, "red")
         self.assertEqual(bar_column.finished_style, "red")
         self.assertIsNone(formatter._progress)

@@ -3,8 +3,6 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from enum import Enum
 from dataclasses import dataclass
-import re
-from urllib.parse import urlparse
 
 from ..domain.manifest import Manifest
 from ..domain.submodule import SubmoduleDefinition
