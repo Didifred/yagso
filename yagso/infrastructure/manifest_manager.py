@@ -3,7 +3,7 @@
 import re
 import yaml
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from .git_ops import GitOperations
 from ..domain.manifest import Manifest
@@ -45,7 +45,7 @@ class ManifestManager:
 
         setattr(submodule, field_name, field_value)
 
-    def get_submodule_field(self, manifest: Manifest, root_path: str, field_name: str) -> Optional:
+    def get_submodule_field(self, manifest: Manifest, root_path: str, field_name: str) -> Any:
         """Get a specific field of a submodule identified by root_path.
 
         Args:
@@ -431,7 +431,7 @@ class ManifestManager:
         except yaml.YAMLError as e:
             raise ValueError(f"Invalid YAML in manifest: {e}") from e
 
-    def get_submodule_field(self, bom: Bom, root_path: str, field_name: str) -> Optional:
+    def get_submodule_field(self, bom: Bom, root_path: str, field_name: str) -> Any:
         """Get a specific field of a submodule identified by root_path.
 
         Args:

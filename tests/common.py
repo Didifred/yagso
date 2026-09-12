@@ -8,11 +8,7 @@ import unittest
 import gc
 from pathlib import Path
 from yagso.infrastructure.git_ops import GitOperations
-from git import Repo
 import os
-import shutil
-import subprocess
-import sys
 from scripts.watcher_toggle import WatcherToggle
 
 

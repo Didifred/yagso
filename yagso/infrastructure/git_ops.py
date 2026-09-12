@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from git import Repo, Submodule, Git
 from git.config import GitConfigParser
+
 from ..domain.submodule import SubmoduleDefinition
 
 
@@ -44,6 +45,7 @@ except Exception:
 class GitOperations:
     """Interface to Git commands using gitpython."""
 
+    @staticmethod
     def is_same_repo(url1: str, url2: str) -> bool:
         """Check whether two repository URLs reference the same remote.
 
@@ -60,17 +62,50 @@ class GitOperations:
             True if both URLs resolve to the same HEAD object name, False
             on mismatch or when the remote check fails.
         """
-        g = Git()
         try:
-            head1 = g.ls_remote(url1, 'HEAD').split()[0]
-            head2 = g.ls_remote(url2, 'HEAD').split()[0]
+            head1 = GitOperations._get_remote_head(url1)
+            head2 = GitOperations._get_remote_head(url2)
+
             return head1 == head2
         except BaseException as e:
             raise IOError(f"Invalid repository url : {e}") from e
 
-        return False
+    @staticmethod
+    def _get_remote_head(url: str) -> str:
+        """Check that a remote URL is accessible and return its HEAD SHA.
+
+        ``git ls-remote`` is used as the accessibility check because it supports
+        all Git URL forms, including authenticated HTTPS, SSH, and local remotes.
+        The response is parsed and reused so each URL is checked only once.
+
+        Args:
+            url: Repository URL to check.
+
+        Returns:
+            The remote HEAD object name.
+
+        Raises:
+            ValueError: If the URL is empty or the remote has no HEAD reference.
+            git.GitCommandError: If Git cannot access the remote.
+        """
+        if not url or not url.strip():
+            raise ValueError("Repository URL is empty")
+
+        g = Git()
+        g.update_environment(
+            GIT_TERMINAL_PROMPT="0",  # kills interactive HTTP/HTTPS prompts
+            GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10",  # kills SSH prompts + adds TCP timeout
+        )
+        try:
+            references = g.ls_remote(url, 'HEAD').strip()
+        except git.GitCommandError as e:
+            raise IOError(f"Repository URL is not accessible: {url}: {e}") from e
+
+        head = references.split()[0]
+        return head
 
     # Helper to compare short/long SHA forms
+    @staticmethod
     def sha_equal(a: Optional[str], b: Optional[str]) -> bool:
         """Return True when two commit-ish strings refer to the same commit.
 
@@ -789,6 +824,8 @@ class GitOperations:
     def commit_all(self, message: str) -> None:
         """Commit all changes recursively, deepest submodules first."""
         try:
+
+            branch = ""
             if not self.repo.head.is_detached:
                 branch = self.repo.active_branch.name
             else:
@@ -855,7 +892,7 @@ class GitOperations:
 
         return git_dir
 
-    def _commit_recursive(self, repo: git.Repo, message: str, branch) -> str:
+    def _commit_recursive(self, repo: git.Repo, message: str, branch: str) -> str:
         """Post-order DFS: commit deepest submodules before their parents."""
         for submodule in repo.submodules:
             if not submodule.module_exists():

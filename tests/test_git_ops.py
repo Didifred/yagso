@@ -1,7 +1,7 @@
 import unittest
 import tempfile
 import git
-import shutil
+from unittest.mock import patch
 from pathlib import Path
 
 from git import Repo
@@ -12,6 +12,29 @@ from tests.common import BaseGitTest
 
 
 class TestGitOps(BaseGitTest):
+
+    def test_is_same_repo_checks_each_url_once(self):
+        with patch('yagso.infrastructure.git_ops.Git') as git_class:
+            git_class.return_value.ls_remote.side_effect = [
+                'abc123\tHEAD\n',
+                'abc123\tHEAD\n',
+            ]
+
+            self.assertTrue(GitOperations.is_same_repo('url1', 'url2'))
+
+            self.assertEqual(git_class.return_value.ls_remote.call_count, 2)
+            git_class.return_value.ls_remote.assert_any_call('url1', 'HEAD')
+            git_class.return_value.ls_remote.assert_any_call('url2', 'HEAD')
+
+    def test_is_same_repo_rejects_inaccessible_url_before_checking_other_url(self):
+        with patch('yagso.infrastructure.git_ops.Git') as git_class:
+            git_class.return_value.ls_remote.side_effect = git.GitCommandError(
+                'ls-remote', 'remote unavailable')
+
+            with self.assertRaises(IOError):
+                GitOperations.is_same_repo('unavailable', 'url2')
+
+            git_class.return_value.ls_remote.assert_called_once_with('unavailable', 'HEAD')
 
     @unittest.skip("Utility method test, not a real test case")
     def test_rebuild_submodule_metadata(self):
