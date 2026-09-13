@@ -459,15 +459,37 @@ class GitOperations:
                 current_branch = None
 
             if current_branch != submodule_def.tracking_branch:
+                fallback_path = False
                 if submodule_def.tracking_branch:
-                    self.repo.git.submodule(
-                        "set-branch",
-                        "--branch",
-                        submodule_def.tracking_branch,
-                        submodule_def.name)
+                    # Different git versions may require using name or path to set the branch
+                    if submodule_def.name is not None:
+                        try:
+                            self.repo.git.submodule(
+                                "set-branch",
+                                "--branch",
+                                submodule_def.tracking_branch,
+                                submodule_def.name)
+                        except git.GitCommandError:
+                            fallback_path = True
+
+                    if submodule_def.name is None or fallback_path:
+                        self.repo.git.submodule(
+                            "set-branch",
+                            "--branch",
+                            submodule_def.tracking_branch,
+                            submodule_def.path)
+
                 else:
                     # Unset branch if tracking_branch is None or empty
-                    self.repo.git.submodule("set-branch", "--unset", submodule_def.name)
+                    # Different git versions may require using name or path to set the branch
+                    if submodule_def.name is not None:
+                        try:
+                            self.repo.git.submodule("set-branch", "--unset", submodule_def.name)
+                        except git.GitCommandError:
+                            fallback_path = True
+
+                    if submodule_def.name is None or fallback_path:
+                        self.repo.git.submodule("set-branch", "--unset", submodule_def.path)
 
                 # Stage .gitmodules
                 stage_gitmodules = True
