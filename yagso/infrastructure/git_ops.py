@@ -588,9 +588,16 @@ class GitOperations:
         desired_branch = submodule_def.tracking_branch
         desired_commit = submodule_def.commit
 
-        # create new submodule
-        submodule = self.repo.create_submodule(name=submodule_def.name, path=path, url=url,
-                                               branch=submodule_def.tracking_branch)
+        # Test first if the submodule path already exists in the repository
+        if (self.repo_path / path).exists():
+            # Reuse existing submodule if the path already exists
+            self.repo.git.submodule('add', '-b', desired_branch, '--name', name, url, path)
+            subrepo = self.repo.submodule(name).module()
+        else:
+            # Create new submodule
+            submodule = self.repo.create_submodule(name=submodule_def.name, path=path, url=url,
+                                                   branch=submodule_def.tracking_branch)
+            subrepo = submodule.module()
 
         # rewrite in git order (path, url, branch) to avoid unnecessary diffs
         # Determine the .gitmodules file path for this repository
@@ -602,12 +609,12 @@ class GitOperations:
 
         # Checkout desired commit/branch
         if desired_commit:
-            submodule.module().git.checkout(desired_commit)
+            subrepo.git.checkout(desired_commit)
         elif desired_branch:
-            submodule.module().git.checkout(desired_branch)
+            subrepo.git.checkout(desired_branch)
         else:
             # No desired commit or branch specified, just checkout the default
-            submodule.module().git.checkout()
+            subrepo.git.checkout()
 
         # Stage .gitmodules and the gitlink
         try:
@@ -621,7 +628,7 @@ class GitOperations:
             raise RuntimeError(f"Failed to stage submodule path {path}: {e}") from e
 
         # Initialize and update eventual inner submodules recursively
-        submodule.module().git.submodule('update', '--init', '--recursive')
+        subrepo.git.submodule('update', '--init', '--recursive')
 
     def remove_submodule(self, block: Dict[str, Any]) -> None:
         """Remove a submodule described by a parsed .gitmodules block.

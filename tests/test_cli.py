@@ -424,6 +424,33 @@ class TestCli(BaseGitTest):
         finally:
             manager.save_manifest(manifest, pathYaml)
 
+    def test_configure_command_repopulate_subs(self):
+        """Test that configure command works with repopulating submodules after a
+        submodule has been removed from the repo and added back to the manifest"""
+        # Modify yagso.yaml to add a new submodule addedsub
+        pathYaml = Path('yagso.yaml')
+        manager = ManifestManager()
+        manifest = manager.load_manifest(pathYaml)
+        new_manifest = copy.deepcopy(manifest)
+
+        manager.update_submodule_field(new_manifest,
+                                       'lib2', 'commit',
+                                       'origin/feature/no_submodule')
+
+        # Write modified manifest back
+        manager.save_manifest(new_manifest, pathYaml)
+
+        try:
+            controller = CLIController(True)
+
+            result = controller.run(['configure'])
+
+            # Verify that lib3 submodule has been added and that the command returns 0
+            self.assertEqual(result, 0)
+
+        finally:
+            manager.save_manifest(manifest, pathYaml)
+
     def test_commit_command_none(self):
         """Test that commit command without changes returns information and does not fail"""
 

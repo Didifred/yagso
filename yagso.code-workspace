@@ -16,6 +16,7 @@
             "test_*.py"
         ],
         "python.testing.autoTestDiscoverOnSaveEnabled": true,
-        "chat.newSession.defaultMode": "yagso"
+        "chat.newSession.defaultMode": "yagso",
+        "git-graph.maxDepthOfRepoSearch": 5
     }
 }
