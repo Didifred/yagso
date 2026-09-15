@@ -445,7 +445,7 @@ class TestCli(BaseGitTest):
 
             result = controller.run(['configure'])
 
-            # Verify that lib3 submodule has been added and that the command returns 0
+            # Verify that lib3 submodule has been added in lib2 and that the command returns 0
             self.assertEqual(result, 0)
 
         finally:
