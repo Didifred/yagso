@@ -590,9 +590,12 @@ class GitOperations:
 
         # Test first if the submodule path already exists in the repository
         if (self.repo_path / path).exists():
-            # Reuse existing submodule if the path already exists
-            self.repo.git.submodule('add', '-b', desired_branch, '--name', name, url, path)
-            subrepo = self.repo.submodule(name).module()
+            if (self.repo_path / path / '.git').exists():
+                # Reuse existing submodule if the path already exists
+                self.repo.git.submodule('add', '-b', desired_branch, '--name', name, url, path)
+                subrepo = self.repo.submodule(name).module()
+            else:
+                raise RuntimeError(f"Fail to add submodule at {path}, folder already exists.")
         else:
             # Create new submodule
             submodule = self.repo.create_submodule(name=submodule_def.name, path=path, url=url,
