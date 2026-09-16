@@ -236,6 +236,10 @@ class TestCli(BaseGitTest):
             # Verify that lib1 url change to ssh url and that the command returns 0
             self.assertEqual(result, 0)
 
+            updated_manifest = manager.load_manifest(pathYaml)
+            updated_url = manager.get_submodule_field(updated_manifest, 'lib1', 'url')
+            self.assertEqual(updated_url, 'git@github.com:Didifred/yagso_test_repo_1.git')
+
         finally:
             manager.save_manifest(manifest, pathYaml)
 

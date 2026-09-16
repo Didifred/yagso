@@ -102,6 +102,7 @@ class GitOperations:
             raise IOError(f"Repository URL is not accessible: {url}: {e}") from e
 
         head = references.split()[0]
+
         return head
 
     # Helper to compare short/long SHA forms
@@ -209,6 +210,14 @@ class GitOperations:
                 self._repo = None
             except Exception:
                 pass
+
+    def get_repository_url(self) -> str:
+        """Return the URL configured for the repository's origin remote."""
+        try:
+            return self.repo.remote('origin').url
+        except (git.InvalidGitRepositoryError, ValueError) as e:
+            raise RuntimeError(
+                f"Unable to read origin URL from repository: {self.repo_path}") from e
 
     def get_recorded_commit(self, path: str) -> Optional[str]:
         """Return the gitlink commit SHA for `path` recorded in the index or `HEAD`.
@@ -589,14 +598,38 @@ class GitOperations:
         desired_commit = submodule_def.commit
 
         # Test first if the submodule path already exists in the repository
-        if (self.repo_path / path).exists():
-            if (self.repo_path / path / '.git').exists():
-                # Reuse existing submodule if the path already exists
-                self.repo.git.submodule('add', '-b', desired_branch, '--name', name, url, path)
+        full_path = self.repo_path / path
+        is_exist = full_path.exists()
+        is_dir = is_exist and full_path.is_dir()
+        is_empty = is_dir and not any(full_path.iterdir())
+
+        if is_dir and not is_empty:
+            if (full_path / '.git').exists():
+                with GitOperations(full_path) as ops:
+                    existing_url = ops.get_repository_url()
+
+                if not self.is_same_repo(url, existing_url):
+                    raise RuntimeError(
+                        f"Existing repository at {path} does not match requested submodule URL: "
+                        f"{url} != {existing_url}")
+
+                # Register a matching existing repository without recloning it.
+                add_args = ['add', '--force']
+                if desired_branch:
+                    add_args[1:1] = ['-b', desired_branch]
+                if name:
+                    add_args.extend(['--name', name])
+                add_args.extend([url, path])
+
+                self.repo.git.submodule(*add_args)
                 subrepo = self.repo.submodule(name).module()
             else:
-                raise RuntimeError(f"Fail to add submodule at {path}, folder already exists.")
+                raise RuntimeError(
+                    f"Fail to add submodule at {path}, non empty folder already exists.")
         else:
+            if is_dir and is_empty:
+                full_path.rmdir()
+
             # Create new submodule
             submodule = self.repo.create_submodule(name=submodule_def.name, path=path, url=url,
                                                    branch=submodule_def.tracking_branch)
