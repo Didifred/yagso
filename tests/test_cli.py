@@ -209,6 +209,10 @@ class TestCli(BaseGitTest):
 
             # Verify that lib2/lib3 is now named innerLib3Test that the command returns 0
             self.assertEqual(result, 0)
+            self.assertEqual(
+                manager.get_submodule_field(
+                    manager.load_manifest(pathYaml), 'lib2/lib3', 'name'),
+                'innerLib3Test')
 
         finally:
             manager.save_manifest(manifest, pathYaml)
