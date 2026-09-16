@@ -184,7 +184,8 @@ class TestCli(BaseGitTest):
 
             result = controller.run(['configure'])
 
-            # Verify that lib3/bis is now at commit develop/YAGSO and that the command returns 0
+            # TODO - Verify that lib3/bis is now at commit develop/YAGSO and that the
+            # command returns 0
             self.assertEqual(result, 0)
         finally:
             manager.save_manifest(manifest, pathYaml)
