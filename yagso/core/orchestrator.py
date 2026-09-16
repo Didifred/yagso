@@ -174,7 +174,7 @@ class SubmoduleOrchestrator:
                 git_ops.remove_submodule(block)
 
             for submodule in childs:
-                new_root = root_path / Path(submodule.root_path)
+                new_root = root_path / Path(submodule.path)
                 self._sync_child_submodules(
                     new_root, submodule.submodules)
 
