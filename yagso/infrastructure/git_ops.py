@@ -558,6 +558,10 @@ class GitOperations:
 
             if stage_index:
                 try:
+                    # Update recusively if the submodule has nested submodules
+                    if (bool(sub_repo.submodules)):
+                        sub_repo.git.submodule('update', '--init', '--recursive')
+
                     self.repo.git.add(submodule_def.path)
                 except Exception as e:
                     raise RuntimeError(
