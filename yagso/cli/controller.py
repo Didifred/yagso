@@ -11,6 +11,7 @@ from ..core.handlers import (
     GenerateHandler,
     UpdateHandler,
     ConfigureHandler,
+    StatusHandler,
     CommitHandler,
     PushHandler,
 )
@@ -71,6 +72,7 @@ class CLIController:
             "generate": GenerateHandler,
             "update": UpdateHandler,
             "configure": ConfigureHandler,
+            "status": StatusHandler,
             "commit": CommitHandler,
             "push": PushHandler,
         }
