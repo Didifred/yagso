@@ -424,8 +424,10 @@ class GitOperations:
                 path = submodule.path
                 commit_sha = submodule.hexsha
 
-                # Remove old submodule (keeps .git/modules)
-                submodule.remove(force=False, module=True)
+                # Remove old submodule (keeps .git/modules). A submodule can have
+                # a checked-out commit newer than the parent gitlink, which GitPython
+                # rejects unless this intentional rename is forced.
+                submodule.remove(force=True, module=True, configuration=True)
 
                 # create new submodule with updated name and previous properties.
                 # set wanted tracking branch (if any)
@@ -440,8 +442,14 @@ class GitOperations:
                 with config:
                     pass
 
+                sub_repo = submodule.module()
+
                 # Checkout same commit
-                submodule.module().git.checkout(commit_sha)
+                sub_repo.git.checkout(commit_sha)
+
+                # Update recusively if the submodule has nested submodules
+                if (bool(sub_repo.submodules)):
+                    sub_repo.git.submodule('update', '--init', '--recursive')
 
                 # Stage .gitmodules
                 stage_gitmodules = True
