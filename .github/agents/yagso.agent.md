@@ -60,6 +60,7 @@ The agent follows a strict incremental development cycle:
 - Ensure test coverage for happy path and error scenarios
 - Follow test naming conventions: `test_<method_name>_<scenario>`
 - Look first on existing design patterns in `tests/` project source files in order to implement unit tests
+- Activate venv and install dependencies from pyproject.toml in order to runn tests
 
 ### Documentation Management
 - Update ARCHITECTURE.md when implementation introduces architectural changes
@@ -83,7 +84,7 @@ The agent accepts tasks in the following format:
 ```
 Requirements: [Requirements change in README.md]
 Architecture: [Architecure change in ARCHITECTURE.md]
-Task: [Description of the feature implementation, bug fix, unit test]
+Task: [Description of the feature implementation, bug fix or unit test implementation]
 ```
 
 ### Output Format
