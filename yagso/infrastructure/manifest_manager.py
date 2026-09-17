@@ -174,14 +174,17 @@ class ManifestManager:
             raise FileNotFoundError(
                 f"No .gitmodules file found in {root_path}")
 
+        # Initialize progress tracking with a total of 1 because submodules are discovered
+        # recursively
         self.progress_total = 1
         self.progress_current = 0
 
         submodules = self._parse_submodule(root_path, prefix_path=Path(""))
 
+        # Update progress after parsing all submodules
         self.progress_current += 1
         OutputFormatter.instance().progress(self.progress_current, self.progress_total,
-                                            f"End parsing submodules in {root_path}")
+                                            f"Manifest synchronized")
 
         if not submodules:
             raise ValueError("No submodules found in .gitmodules")
@@ -252,7 +255,7 @@ class ManifestManager:
         url = block.get("url", "")
 
         OutputFormatter.instance().progress(self.progress_current, self.progress_total,
-                                            f"Parsing {path} submodule ")
+                                            f"Parsing {path}")
 
         if not name or not path or not url:
             raise ValueError(f"Incomplete submodule definition: {block}")
