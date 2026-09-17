@@ -160,11 +160,14 @@ class TestCli(BaseGitTest):
 
     def test_configure_command(self):
         """Test that configure command works (identity)"""
+        path_yaml = Path('yagso.yaml')
+        original_manifest = path_yaml.read_bytes()
         controller = CLIController(True)
 
         result = controller.run(['configure'])
 
-        # Verify that yaml file is unchanged and that the command returns 0
+        # Verify that the manifest is unchanged and that the command returns 0.
+        self.assertEqual(path_yaml.read_bytes(), original_manifest)
         self.assertEqual(result, 0)
 
     def test_configure_command_commit_change(self):
@@ -184,8 +187,10 @@ class TestCli(BaseGitTest):
 
             result = controller.run(['configure'])
 
-            # TODO - Verify that lib3/bis is now at commit develop/YAGSO and that the
-            # command returns 0
+            # Verify that lib3/bis is now checked out on develop/YAGSO and that the
+            # command returns 0.
+            submodule_repo = Repo('lib3/bis')
+            self.assertEqual(submodule_repo.head.reference.name, 'develop/YAGSO')
             self.assertEqual(result, 0)
         finally:
             manager.save_manifest(manifest, pathYaml)
@@ -296,7 +301,12 @@ class TestCli(BaseGitTest):
 
             result = controller.run(['configure'])
 
-            # Verify that lib2/lib3 tracking branch change to main  and the command returns 0
+            # Verify that the submodule tracking branch is configured to main in
+            # .gitmodules and that the command returns 0.
+            root_repo = Repo(Path.cwd())
+            configured_branch = root_repo.git.config(
+                '-f', '.gitmodules', '--get', 'submodule.lib2.branch')
+            self.assertEqual(configured_branch, 'main')
             self.assertEqual(result, 0)
 
         finally:
@@ -328,7 +338,10 @@ class TestCli(BaseGitTest):
 
             result = controller.run(['configure'])
 
-            # Verify that testaddedsub submodule has been added and that the command returns 0
+            # Verify that the new submodule exists on disk and that the command returns 0.
+            added_submodule_path = Path('libs/addedsub')
+            self.assertTrue(added_submodule_path.exists())
+            self.assertTrue((added_submodule_path / '.git').exists())
             self.assertEqual(result, 0)
 
         finally:
@@ -359,7 +372,11 @@ class TestCli(BaseGitTest):
 
             result = controller.run(['configure'])
 
-            # Verify that testaddedsub submodule has been added and that the command returns 0
+            # Verify that the nested submodule is created under lib2 and that the
+            # command returns 0.
+            nested_submodule_path = Path('lib2/addedsub')
+            self.assertTrue(nested_submodule_path.exists())
+            self.assertTrue((nested_submodule_path / '.git').exists())
             self.assertEqual(result, 0)
 
             # TODO : stage upper level submodules ?
@@ -391,8 +408,24 @@ class TestCli(BaseGitTest):
 
             result = controller.run(['configure'])
 
-            # Verify that testaddedsubdepth submodule has been added and that the command returns 0
-            # Verify that inner submodules has been discovered too in yagso.yaml !
+            # Verify that the hierarchy submodule exists on disk, has Git metadata,
+            # and that the command returns 0.
+            hierarchy_submodule_path = Path('lib4')
+            self.assertTrue(hierarchy_submodule_path.exists())
+            self.assertTrue((hierarchy_submodule_path / '.git').exists())
+
+            nested_lib2_path = hierarchy_submodule_path / 'lib2'
+            nested_lib3_path = nested_lib2_path / 'lib3'
+            self.assertTrue(nested_lib2_path.exists())
+            self.assertTrue((nested_lib2_path / '.git').exists())
+            self.assertTrue(nested_lib3_path.exists())
+            self.assertTrue((nested_lib3_path / '.git').exists())
+
+            configured_manifest = manager.load_manifest(pathYaml)
+            self.assertIsNotNone(
+                manager.get_submodule_field(configured_manifest, 'lib4/lib2', 'submodules'))
+            self.assertIsNotNone(
+                manager.get_submodule_field(configured_manifest, 'lib4/lib2/lib3', 'url'))
             self.assertEqual(result, 0)
 
         finally:
@@ -427,8 +460,20 @@ class TestCli(BaseGitTest):
 
             result = controller.run(['commit', '--message', 'Test commit from CLI'])
 
-            # Verify that testaddedsub submodule has been added and gitlinks comitted
-            # and that the command returns 0
+            # Verify that the nested submodule exists and its gitlink was committed.
+            added_submodule_path = Path('lib2/addedsub')
+            self.assertTrue(added_submodule_path.exists())
+            self.assertTrue((added_submodule_path / '.git').exists())
+
+            lib2_repo = Repo('lib2')
+            added_submodule_gitlink = lib2_repo.git.ls_tree('HEAD', 'addedsub')
+            self.assertIn('160000 commit', added_submodule_gitlink)
+            self.assertIn('addedsub', added_submodule_gitlink)
+            self.assertFalse(lib2_repo.is_dirty())
+
+            root_repo = Repo(Path.cwd())
+            self.assertIn('Test commit from CLI', root_repo.head.commit.message)
+            self.assertFalse(root_repo.is_dirty())
             self.assertEqual(result, 0)
         finally:
             manager.save_manifest(manifest, pathYaml)
@@ -454,7 +499,22 @@ class TestCli(BaseGitTest):
 
             result = controller.run(['configure'])
 
-            # Verify that lib3 submodule has been added in lib2 and that the command returns 0
+            # Verify that lib2 uses the requested commit and that its lib3
+            # submodule has been repopulated.
+            lib2_repo = Repo('lib2')
+            self.assertEqual(
+                lib2_repo.head.commit.hexsha,
+                lib2_repo.commit('origin/feature/no_submodule').hexsha)
+
+            lib3_submodule_path = Path('lib2/lib3')
+            self.assertTrue(lib3_submodule_path.exists())
+            self.assertTrue((lib3_submodule_path / '.git').exists())
+            self.assertTrue(any(
+                submodule.path == 'lib3' for submodule in lib2_repo.submodules))
+
+            configured_manifest = manager.load_manifest(pathYaml)
+            self.assertIsNotNone(
+                manager.get_submodule_field(configured_manifest, 'lib2/lib3', 'url'))
             self.assertEqual(result, 0)
 
         finally:
