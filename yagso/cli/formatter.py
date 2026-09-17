@@ -3,7 +3,7 @@
 from typing import Optional
 
 from rich.console import Console
-from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn
+from rich.progress import Progress, BarColumn, TextColumn
 
 
 class OutputFormatter:
@@ -56,7 +56,7 @@ class OutputFormatter:
                 finished_style="green")
             self._progress = Progress(
                 self._bar_column,
-                TaskProgressColumn(),
+                TextColumn("{task.completed}/{task.total}"),
                 TextColumn("|"),
                 TextColumn("[dim]{task.description}[/dim]"),
                 console=self._console,
@@ -65,9 +65,12 @@ class OutputFormatter:
             self._progress.start()
             self._task_id = self._progress.add_task(message, total=total)
 
+        # Ensure current displayed is non-negative
+        current_updated = max(current, 0)
+
         self._progress.update(
             self._task_id,
-            completed=current,
+            completed=current_updated,
             total=total,
             description=message,
             refresh=True)
