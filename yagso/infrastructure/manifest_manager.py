@@ -174,10 +174,10 @@ class ManifestManager:
             raise FileNotFoundError(
                 f"No .gitmodules file found in {root_path}")
 
-        # Initialize progress tracking with a total of 1 because submodules are discovered
+        # Initialize progress tracking with a current -1 because submodules are discovered
         # recursively
-        self.progress_total = 1
-        self.progress_current = 0
+        self.progress_total = 0
+        self.progress_current = -1
 
         submodules = self._parse_submodule(root_path, prefix_path=Path(""))
 
