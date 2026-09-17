@@ -65,7 +65,12 @@ class OutputFormatter:
             self._progress.start()
             self._task_id = self._progress.add_task(message, total=total)
 
-        self._progress.update(self._task_id, completed=current, description=message)
+        self._progress.update(
+            self._task_id,
+            completed=current,
+            total=total,
+            description=message,
+            refresh=True)
 
         if current >= total:
             self._progress.stop()

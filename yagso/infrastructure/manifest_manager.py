@@ -174,9 +174,14 @@ class ManifestManager:
             raise FileNotFoundError(
                 f"No .gitmodules file found in {root_path}")
 
-        self.progress_total = 0
+        self.progress_total = 1
         self.progress_current = 0
+
         submodules = self._parse_submodule(root_path, prefix_path=Path(""))
+
+        self.progress_current += 1
+        OutputFormatter.instance().progress(self.progress_current, self.progress_total,
+                                            f"End parsing submodules in {root_path}")
 
         if not submodules:
             raise ValueError("No submodules found in .gitmodules")
@@ -205,9 +210,10 @@ class ManifestManager:
 
             results = []
             for block in blocks:
-                self.progress_current += 1
 
+                self.progress_current += 1
                 sub = self._build_submodule_from_block(block, repo_fs_path, prefix_path, git_ops)
+
                 results.append(sub)
 
         return results

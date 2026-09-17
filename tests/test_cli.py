@@ -61,6 +61,18 @@ class TestFormatter(unittest.TestCase):
         self.assertIn("\x1b[31m", stream.getvalue())
         self.assertIn("Failed", stream.getvalue())
 
+    def test_progress_updates_total(self):
+        """Progress reflects a larger total reported after task creation."""
+        console = Console(file=StringIO(), color_system=None, force_terminal=True)
+
+        with patch("yagso.cli.formatter.Console", return_value=console):
+            formatter = OutputFormatter()
+            formatter.progress(1, 2, "Syncing")
+            formatter.progress(2, 5, "Syncing more")
+
+        self.assertEqual(formatter._progress.tasks[0].total, 5)
+        self.assertEqual(formatter._progress.tasks[0].completed, 2)
+
 
 class TestCli(BaseGitTest):
 
