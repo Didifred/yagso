@@ -6,7 +6,9 @@ from unittest.mock import patch
 from git import Repo
 from rich.console import Console
 
-from yagso.cli.formatter import OutputFormatter
+from yagso.cli.formatter import OutputFormatter, get_output_formatter
+from yagso.core.handlers import GenerateHandler
+from yagso.core.orchestrator import SubmoduleOrchestrator
 from yagso.infrastructure.git_ops import GitOperations
 from yagso.cli.controller import CLIController
 from yagso.infrastructure.manifest_manager import ManifestManager
@@ -15,10 +17,25 @@ from tests.common import BaseGitTest
 
 
 class TestFormatter(unittest.TestCase):
+    """Unit tests for OutputFormatter and related functionality."""
 
     def test_instance_returns_same_formatter(self):
         """The formatter getter returns one shared instance."""
         self.assertIs(OutputFormatter.instance(), OutputFormatter.instance())
+
+    def test_public_formatter_getter_returns_shared_instance(self):
+        """The public accessor returns the shared formatter."""
+        self.assertIs(get_output_formatter(), OutputFormatter.instance())
+
+    def test_core_accepts_injected_output(self):
+        """Core services retain the injected output port."""
+        output = object()
+        orchestrator = SubmoduleOrchestrator(Path('.'), output)
+        handler = GenerateHandler(orchestrator, output)
+
+        self.assertIs(orchestrator.output, output)
+        self.assertIs(orchestrator.manifest_manager.output, output)
+        self.assertIs(handler.output, output)
 
     def test_output_formatter_apis_use_rich_console(self):
         """The formatter exposes the expected Rich-backed output APIs."""
@@ -75,6 +92,7 @@ class TestFormatter(unittest.TestCase):
 
 
 class TestCli(BaseGitTest):
+    """Integration tests for the CLIController and command handlers."""
 
     def test_controller_creation(self):
         """Test that CLIController can be created"""
@@ -101,10 +119,10 @@ class TestCli(BaseGitTest):
         result = controller.run(['generate'])
 
         # Verified fields in yagso.yaml are like expected, and that the command returns 0
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
 
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
 
         commit_value = manager.get_submodule_field(manifest, 'lib1', 'commit')
         self.assertEqual(commit_value, 'ddb8e804644540502551230b8a9eeb5ffe797abf')
@@ -145,6 +163,10 @@ class TestCli(BaseGitTest):
         except Exception as e:
             self.fail(f"Failed to create local branches in submodule: {e}")
 
+        # Checkout main in root repo to ensure commit is made on main branch
+        root_repo = Repo(Path.cwd())
+        root_repo.git.checkout('main')
+
         # Commit submodules and root repo to ensure the local branches are present
         # in the repository state
         with GitOperations(Path.cwd()) as git_ops:
@@ -157,9 +179,9 @@ class TestCli(BaseGitTest):
         # test_submodule_branch and with main branch for submodule lib2/lib3 written main|origin.
         # Verify that command returns 0
         # Load generated manifest and verify refs include the local branch
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
 
         refs = manager.get_submodule_field(manifest, 'lib2/lib3', 'ref')
         # Ensure refs is a list and contains the test local branch
@@ -185,14 +207,14 @@ class TestCli(BaseGitTest):
     def test_configure_command_commit_change(self):
         """Test that configure command works with commit change to develop/YAGSO"""
         # Modify yagso.yaml to change lib3/bis commit to develop/YAGSO
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(new_manifest, 'lib3/bis', 'commit', 'develop/YAGSO')
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -205,19 +227,19 @@ class TestCli(BaseGitTest):
             self.assertEqual(submodule_repo.head.reference.name, 'develop/YAGSO')
             self.assertEqual(result, 0)
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_configure_command_name_change(self):
         """Test that configure command works with name change to innerLib3Test"""
         # Modify yagso.yaml to change name of lib2/lib3 repo to innerLib3Test
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(new_manifest, 'lib2/lib3', 'name', 'innerLib3Test')
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -228,18 +250,18 @@ class TestCli(BaseGitTest):
             self.assertEqual(result, 0)
             self.assertEqual(
                 manager.get_submodule_field(
-                    manager.load_manifest(pathYaml), 'lib2/lib3', 'name'),
+                    manager.load_manifest(path_yaml), 'lib2/lib3', 'name'),
                 'innerLib3Test')
 
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_configure_command_url_change(self):
         """Test that configure command works with url change to ssh"""
         # Modify yagso.yaml to change lib1 url to ssh
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(
             new_manifest,
@@ -248,7 +270,7 @@ class TestCli(BaseGitTest):
             'git@github.com:Didifred/yagso_test_repo_1.git')
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -258,19 +280,19 @@ class TestCli(BaseGitTest):
             # Verify that lib1 url change to ssh url and that the command returns 0
             self.assertEqual(result, 0)
 
-            updated_manifest = manager.load_manifest(pathYaml)
+            updated_manifest = manager.load_manifest(path_yaml)
             updated_url = manager.get_submodule_field(updated_manifest, 'lib1', 'url')
             self.assertEqual(updated_url, 'git@github.com:Didifred/yagso_test_repo_1.git')
 
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_configure_command_bad_url_change(self):
         """Test that configure command failed with wrong url change"""
         # Modify yagso.yaml to change lib1 url to ssh
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(
             new_manifest,
@@ -279,7 +301,7 @@ class TestCli(BaseGitTest):
             'https://github.com/Didifred/yagso_test_oups.git')
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -290,14 +312,14 @@ class TestCli(BaseGitTest):
             self.assertEqual(result, 1)
 
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_configure_command_tracking_change(self):
         """Test that configure command works with tracking branch"""
         # Modify yagso.yaml to change lib2/lib3 url to ssh
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(
             new_manifest,
@@ -306,7 +328,7 @@ class TestCli(BaseGitTest):
             'main')
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -323,14 +345,14 @@ class TestCli(BaseGitTest):
 
         finally:
             # Write original manifest back to yaml
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_configure_command_add_submodule(self):
         """Test that configure command works with adding a new submodule"""
         # Modify yagso.yaml to add a new submodule addedsub
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
         sub_def = SubmoduleDefinition(
@@ -343,7 +365,7 @@ class TestCli(BaseGitTest):
         manager.add_submodule_definition(new_manifest, sub_def)
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -357,14 +379,14 @@ class TestCli(BaseGitTest):
             self.assertEqual(result, 0)
 
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_configure_command_add_submodule_level_1(self):
         """Test that configure command works with adding a new submodule"""
         # Modify yagso.yaml to add a new submodule addedsub under lib2
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
         sub_def = SubmoduleDefinition(
@@ -377,7 +399,7 @@ class TestCli(BaseGitTest):
         manager.add_submodule_definition(new_manifest, sub_def)
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -393,14 +415,14 @@ class TestCli(BaseGitTest):
 
             # TODO : stage upper level submodules ?
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_configure_command_add_submodule_hierarchy(self):
         """Test that configure command works with adding a new submodule"""
         # Modify yagso.yaml to add a new submodule addedsub
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
         sub_def = SubmoduleDefinition(
@@ -413,7 +435,7 @@ class TestCli(BaseGitTest):
         manager.add_submodule_definition(new_manifest, sub_def)
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -433,7 +455,7 @@ class TestCli(BaseGitTest):
             self.assertTrue(nested_lib3_path.exists())
             self.assertTrue((nested_lib3_path / '.git').exists())
 
-            configured_manifest = manager.load_manifest(pathYaml)
+            configured_manifest = manager.load_manifest(path_yaml)
             self.assertIsNotNone(
                 manager.get_submodule_field(configured_manifest, 'lib4/lib2', 'submodules'))
             self.assertIsNotNone(
@@ -441,15 +463,15 @@ class TestCli(BaseGitTest):
             self.assertEqual(result, 0)
 
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_commit_command_add_submodule_level_1(self):
         """Test that commit command works"""
 
         # Modify yagso.yaml to add a new submodule lib4
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
         sub_def = SubmoduleDefinition(
@@ -462,13 +484,17 @@ class TestCli(BaseGitTest):
         manager.add_submodule_definition(new_manifest, sub_def)
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
 
             result = controller.run(['configure'])
             self.assertEqual(result, 0)
+
+            # Checkout main in root repo to ensure commit is made on main branch
+            root_repo = Repo(Path.cwd())
+            root_repo.git.checkout('main')
 
             result = controller.run(['commit', '--message', 'Test commit from CLI'])
 
@@ -488,15 +514,15 @@ class TestCli(BaseGitTest):
             self.assertFalse(root_repo.is_dirty())
             self.assertEqual(result, 0)
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_configure_command_repopulate_subs(self):
         """Test that configure command works with repopulating submodules after a
         submodule has been removed from the repo and added back to the manifest"""
         # Modify yagso.yaml to add a new submodule addedsub
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
         manager.update_submodule_field(new_manifest,
@@ -504,7 +530,7 @@ class TestCli(BaseGitTest):
                                        'origin/feature/no_submodule')
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -524,25 +550,25 @@ class TestCli(BaseGitTest):
             self.assertTrue(any(
                 submodule.path == 'lib3' for submodule in lib2_repo.submodules))
 
-            configured_manifest = manager.load_manifest(pathYaml)
+            configured_manifest = manager.load_manifest(path_yaml)
             self.assertIsNotNone(
                 manager.get_submodule_field(configured_manifest, 'lib2/lib3', 'url'))
             self.assertEqual(result, 0)
 
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_commit_command_none(self):
         """Test that commit command without changes returns information and does not fail"""
 
         # Modify yagso.yaml to add a new submodule lib4
-        pathYaml = Path('yagso.yaml')
+        path_yaml = Path('yagso.yaml')
         manager = ManifestManager()
-        manifest = manager.load_manifest(pathYaml)
+        manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
         # Write modified manifest back
-        manager.save_manifest(new_manifest, pathYaml)
+        manager.save_manifest(new_manifest, path_yaml)
 
         try:
             controller = CLIController(True)
@@ -551,7 +577,7 @@ class TestCli(BaseGitTest):
 
             self.assertEqual(result, 0)
         finally:
-            manager.save_manifest(manifest, pathYaml)
+            manager.save_manifest(manifest, path_yaml)
 
     def test_generate_command__bom(self):
         """Test that generate --BOM command works"""
@@ -560,10 +586,10 @@ class TestCli(BaseGitTest):
         result = controller.run(['generate', '--BOM'])
 
         # Verified fields in yagso.yaml are like expected, and that the command returns 0
-        pathYaml = Path('BOM.yaml')
+        path_yaml = Path('BOM.yaml')
         manager = ManifestManager()
 
-        bom = manager.load_bom(pathYaml)
+        bom = manager.load_bom(path_yaml)
 
         commit_value = manager.get_submodule_field(bom, 'lib1', 'commit')
         self.assertEqual(commit_value, 'ddb8e804644540502551230b8a9eeb5ffe797abf')

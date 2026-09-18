@@ -1,11 +1,10 @@
 """Main CLI controller for YAGSO."""
 
 from pathlib import Path
-from typing import Dict, Any
+import traceback
 
 from .parser import ArgumentParser
-from .formatter import OutputFormatter
-import traceback
+from .formatter import get_output_formatter
 from ..core.orchestrator import SubmoduleOrchestrator
 from ..core.handlers import (
     GenerateHandler,
@@ -25,6 +24,7 @@ class CLIController:
     def __init__(self, debug: bool = False):
         self.parser = ArgumentParser()
         self.debug = debug  # Set to True to enable debug output
+        self.output = get_output_formatter()
 
     def run(self, args: list) -> int:
         """Parse arguments and dispatch to appropriate command."""
@@ -42,11 +42,11 @@ class CLIController:
 
             # Check if it's a git repository
             if not (repo_path / ".git").exists():
-                OutputFormatter.instance().error(f"Not a Git repository: {repo_path}")
+                self.output.error(f"Not a Git repository: {repo_path}")
                 return self.FAILURE
 
             # Create orchestrator and handler
-            orchestrator = SubmoduleOrchestrator(repo_path)
+            orchestrator = SubmoduleOrchestrator(repo_path, self.output)
             handler = self._create_handler(options["command"], orchestrator)
 
             # Execute command
@@ -56,14 +56,14 @@ class CLIController:
 
         except Warning as e:
             # Warning-level conditions are informational and should not fail the CLI.
-            OutputFormatter.instance().info(str(e))
+            self.output.info(str(e))
             return self.SUCCESS
 
         except Exception as e:
             # Catch all exceptions at the CLI boundary (catch late principle)
-            OutputFormatter.instance().error(str(e))
+            self.output.error(str(e))
             if self.debug:
-                OutputFormatter.instance().error(traceback.format_exc())
+                self.output.error(traceback.format_exc())
             return self.FAILURE
 
     def _create_handler(self, command: str, orchestrator: SubmoduleOrchestrator):
@@ -81,4 +81,4 @@ class CLIController:
         if not handler_class:
             raise ValueError(f"Unknown command: {command}")
 
-        return handler_class(orchestrator)
+        return handler_class(orchestrator, self.output)

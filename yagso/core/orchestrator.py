@@ -8,6 +8,7 @@ from ..domain.manifest import Manifest
 from ..domain.submodule import SubmoduleDefinition
 from ..infrastructure.git_ops import GitOperations
 from ..infrastructure.manifest_manager import ManifestManager
+from ..output import NullOutput, OutputPort
 
 
 class DiffStatus(Enum):
@@ -21,6 +22,7 @@ class DiffStatus(Enum):
 
 @dataclass
 class SearchResult:
+    """ Represents the result of searching for a submodule in the repo's .gitmodules blocks."""
     status: DiffStatus
     name: str
 
@@ -37,10 +39,11 @@ class StatusEntry:
 class SubmoduleOrchestrator:
     """High-level coordination of submodule operations."""
 
-    def __init__(self, repo_path: Path):
+    def __init__(self, repo_path: Path, output: OutputPort = None):
         """Initialize with repository path."""
         self.repo_path = repo_path
-        self.manifest_manager = ManifestManager()
+        self.output = output or NullOutput()
+        self.manifest_manager = ManifestManager(self.output)
 
     def generate_manifest(
             self,
@@ -50,8 +53,8 @@ class SubmoduleOrchestrator:
         """Generates a YAGSO manifest (yagso.yaml) from the repository's submodule structure.
 
         This method scans the repository's submodule structure starting from the specified root path
-        and generates a manifest file (yagso.yaml) that describes the submodules. The manifest is saved
-        in the root directory of the repository.
+        and generates a manifest file (yagso.yaml) that describes the submodules.
+        The manifest is saved in the root directory of the repository.
 
         Args:
             root_path (Optional[Path]): The root directory of the repository to scan for submodules.
@@ -60,10 +63,12 @@ class SubmoduleOrchestrator:
             files_pattern (Optional[str]): Regular expression used to filter BOM file paths.
 
         Returns:
-            Manifest: The generated manifest object representing the repository's submodule structure.
+            Manifest: The generated manifest object representing the repository's submodule
+            structure.
 
         Raises:
-            FileNotFoundError: If the specified root_path does not exist or is not a valid directory.
+            FileNotFoundError: If the specified root_path does not exist or is not a valid
+                               directory.
             RuntimeError: If there is an issue generating or saving the manifest.
         """
         if root_path is None:
@@ -161,10 +166,7 @@ class SubmoduleOrchestrator:
                 self.manifest_manager.progress_current += 1
 
                 progress_message = f"Configuring {submodule.root_path}"
-                # Imported lazily to keep the core layer free of a hard
-                # dependency on the presentation layer (breaks an import cycle).
-                from ..cli.formatter import OutputFormatter
-                OutputFormatter.instance().progress(
+                self.output.progress(
                     self.manifest_manager.progress_current,
                     self.manifest_manager.progress_total,
                     progress_message)
@@ -241,17 +243,18 @@ class SubmoduleOrchestrator:
                         and (block.get("branch") == submodule.tracking_branch):
                     blocks.remove(block)
                     return SearchResult(DiffStatus.UNCHANGED, git_name)
-                blocks.remove(block)
-                return SearchResult(DiffStatus.MODIFIED, git_name)
-
-            # URL changed but same repository (eg ssh <-> https)
-            if GitOperations.is_same_repo(block.get("url", ""), submodule.url or ""):
-                blocks.remove(block)
-                return SearchResult(DiffStatus.MODIFIED, git_name)
-
-            # URL refers to a different repository: leave the old block in
-            # place so the caller's removal pass drops it, then re-add.
-            return SearchResult(DiffStatus.ADDED, submodule.name or "")
+                else:
+                    blocks.remove(block)
+                    return SearchResult(DiffStatus.MODIFIED, git_name)
+            else:
+                # URL changed but same repository (eg ssh <-> https)
+                if GitOperations.is_same_repo(block.get("url", ""), submodule.url or ""):
+                    blocks.remove(block)
+                    return SearchResult(DiffStatus.MODIFIED, git_name)
+                else:
+                    # URL refers to a different repository: leave the old block in
+                    # place so the caller's removal pass drops it, then re-add.
+                    return SearchResult(DiffStatus.ADDED, submodule.name or "")
 
         # Pass 2: no path match — a block with the same url, commit and name
         # at a different path is a moved submodule.
@@ -262,12 +265,14 @@ class SubmoduleOrchestrator:
                 blocks.remove(block)
                 return SearchResult(DiffStatus.MOVED, block.get("name") or "")
 
+        # No path match, no url+commit+name match — treat as added.
         return SearchResult(DiffStatus.ADDED, submodule.name or "")
 
     def push_changes(self) -> None:
         """Push all commits to remote."""
-        with GitOperations(self.repo_path) as git_ops:
-            git_ops.push_all()
+        # Not implemented yet.
+        # with GitOperations(self.repo_path) as git_ops:
+        #    git_ops.push_all()
 
     def status_report(self, root_path: Optional[Path] = None) -> List[StatusEntry]:
         """Dry-run diff between the manifest (yagso.yaml) and the repository.

@@ -1,22 +1,25 @@
 """Infrastructure layer for manifest file operations."""
 
 import re
-import yaml
 from pathlib import Path
 from typing import Optional, List, Any
+import yaml
 
 from .git_ops import GitOperations
 from ..domain.manifest import Manifest
 from ..domain.bom import Bom
 from ..domain.submodule import SubmoduleDefinition
+from ..output import NullOutput, OutputPort
 
 
 class ManifestManager:
     """Handles reading/writing manifest files using Python's native file operations."""
 
-    def __init__(self):
+    def __init__(self, output: OutputPort = None):
+        """Initialize the manager with an optional output port."""
         self.progress_current = 0
         self.progress_total = 0
+        self.output = output or NullOutput()
 
     def update_submodule_field(self, manifest: Manifest, root_path: str, field_name: str,
                                field_value) -> None:
@@ -186,8 +189,7 @@ class ManifestManager:
 
         # Update progress after parsing all submodules
         self.progress_current += 1
-        OutputFormatter.instance().progress(self.progress_current, self.progress_total,
-                                            f"Manifest synchronized")
+        self.output.progress(self.progress_current, self.progress_total, "")
 
         if not submodules:
             raise ValueError("No submodules found in .gitmodules")
@@ -195,15 +197,17 @@ class ManifestManager:
         return Manifest(submodules=submodules)
 
     def _parse_submodule(self, repo_fs_path: Path, prefix_path: Path = Path("")) -> list:
-        """Parse submodule definitions from a .gitmodules file at the given repository filesystem path,
-        using GitPython to obtain commit information.
+        """Parse submodule definitions from a .gitmodules file at the given repository filesystem
+        path, using GitPython to obtain commit information.
 
         Args:
-            repo_fs_path (Path): Filesystem path to the repository containing the .gitmodules file to parse.
+            repo_fs_path (Path): Filesystem path to the repository containing the .gitmodules file
+            to parse.
             prefix_path (Path, optional): The submodule relative path. Defaults to Path("").
 
         Returns:
-            list: list of SubmoduleDefinition objects representing the submodules defined in the .gitmodules file.
+            list: list of SubmoduleDefinition objects representing the submodules defined
+            in the .gitmodules file.
         """
         gm = repo_fs_path / ".gitmodules"
         if not gm.exists():
@@ -230,7 +234,8 @@ class ManifestManager:
             repo_fs_path: Path,
             prefix_path: Path,
             git_ops: GitOperations) -> SubmoduleDefinition:
-        """Construct a SubmoduleDefinition from a parsed .gitmodules block using git_ops for git info.
+        """Construct a SubmoduleDefinition from a parsed .gitmodules block using git_ops for
+        git info.
 
         This method builds a complete SubmoduleDefinition by combining information from
         the .gitmodules block with git repository state information. It also recursively
@@ -257,11 +262,8 @@ class ManifestManager:
         path = block.get("path", name)
         url = block.get("url", "")
 
-        # Imported lazily to keep the infrastructure layer free of a hard
-        # dependency on the presentation layer (breaks an import cycle).
-        from ..cli.formatter import OutputFormatter
-        OutputFormatter.instance().progress(self.progress_current, self.progress_total,
-                                            f"Parsing {path}")
+        self.output.progress(self.progress_current, self.progress_total,
+                             f"Parsing {path}")
 
         if not name or not path or not url:
             raise ValueError(f"Incomplete submodule definition: {block}")
@@ -344,7 +346,8 @@ class ManifestManager:
             sub_root: str,
             child_submodules: List[SubmoduleDefinition],
             files_pattern: Optional[str] = None) -> List[str]:
-        """List files under a submodule filesystem path, excluding nested submodule folders and .git."""
+        """List files under a submodule filesystem path, excluding nested submodule folders
+        and .git."""
         fs_path = repo_root / sub_root
         if not fs_path.exists() or not fs_path.is_dir():
             return []
@@ -380,10 +383,12 @@ class ManifestManager:
             path: Path,
             repo_root: Path,
             files_pattern: Optional[str] = None) -> None:
-        """Save a Bill Of Materials (BOM.yaml) reflecting repository paths and a single preferred ref per submodule.
+        """Save a Bill Of Materials (BOM.yaml) reflecting repository paths
+        and a single preferred ref per submodule.
 
-        The BOM mirrors the structure of yagso.yaml (version + submodules), but each submodule entry only keeps
-        the `path` (not the name), a single `ref` chosen by priority (tag, remote branch, local branch), and a
+        The BOM mirrors the structure of yagso.yaml (version + submodules),
+        but each submodule entry only keeps the `path` (not the name),
+        a single `ref` chosen by priority (tag, remote branch, local branch), and a
         `files` list containing files in the repository at that submodule path.
         """
         def _conv(sub: SubmoduleDefinition):

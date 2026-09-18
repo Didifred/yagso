@@ -4,6 +4,7 @@ from typing import Optional
 
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn
+from rich.table import Table
 
 
 class OutputFormatter:
@@ -48,7 +49,7 @@ class OutputFormatter:
 
     def table(self, headers: list, rows: list, title: Optional[str] = None) -> None:
         """Display a tabular report."""
-        from rich.table import Table
+
         table = Table(title=title, show_header=True, header_style="bold")
         for header in headers:
             table.add_column(header)
@@ -82,7 +83,7 @@ class OutputFormatter:
             self._task_id,
             completed=current_updated,
             total=total,
-            description=message,
+            description=message or None,
             refresh=True)
 
         if current >= total:
@@ -90,3 +91,11 @@ class OutputFormatter:
             self._progress = None
             self._task_id = None
             self._bar_column = None
+
+
+def get_output_formatter() -> OutputFormatter:
+    """Return the shared Rich-backed output formatter."""
+    return OutputFormatter.instance()
+
+
+__all__ = ["OutputFormatter", "get_output_formatter"]
