@@ -898,10 +898,10 @@ class GitOperations:
         """Update all submodules."""
 
         try:
-            if options.get("init", True) and options.get("remote", True):
+            if options.get("init", False) and options.get("remote", False):
                 # Initialize and update submodule
                 self.repo.git.submodule("update", "--init", "--remote", "--recursive")
-            elif options.get("init", True):
+            elif options.get("init", False):
                 self.repo.git.submodule("update", "--init", "--recursive")
             else:
                 # Just update existing submodules
@@ -918,7 +918,7 @@ class GitOperations:
             if not self.repo.head.is_detached:
                 branch = self.repo.active_branch.name
             else:
-                RuntimeError("Please checkout a branch first in order to commit.")
+                raise RuntimeError("Please checkout a branch first in order to commit.")
 
             # Walk the whole submodule tree bottom-up
             branch = self._commit_recursive(self.repo, message, branch)

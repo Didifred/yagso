@@ -55,6 +55,12 @@ class ArgumentParser:
             help="Apply manifest configuration to repository"
         )
 
+        # status command
+        status_parser = subparsers.add_parser(
+            "status",
+            help="Dry-run diff between manifest and repository (read-only)"
+        )
+
         # commit command
         commit_parser = subparsers.add_parser(
             "commit",
@@ -114,7 +120,7 @@ class ArgumentParser:
         if not command:
             raise ValueError("No command specified")
 
-        if command not in ["generate", "update", "configure", "commit", "push"]:
+        if command not in ["generate", "update", "configure", "status", "commit", "push"]:
             raise ValueError(f"Unknown command: {command}")
 
         # Command-specific validation

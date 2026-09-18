@@ -4,7 +4,18 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any
 from pathlib import Path
 from .orchestrator import SubmoduleOrchestrator
-from ..cli.formatter import OutputFormatter
+
+
+def _formatter():
+    """Return the shared OutputFormatter.
+
+    Imported lazily (inside the function body) so that core modules never
+    force-load the presentation layer at import time — importing
+    ``yagso.core.handlers`` via ``yagso.core`` used to trip a circular
+    import through ``yagso.cli`` → ``yagso.cli.controller``.
+    """
+    from ..cli.formatter import OutputFormatter
+    return OutputFormatter.instance()
 
 
 class CommandHandler(ABC):
@@ -32,7 +43,7 @@ class GenerateHandler(CommandHandler):
             create_bom=create_bom,
             files_pattern=files_pattern,
         )
-        OutputFormatter.instance().success(f"Manifest generated completely")
+        _formatter().success(f"Manifest generated completely")
 
 
 class UpdateHandler(CommandHandler):
@@ -45,7 +56,7 @@ class UpdateHandler(CommandHandler):
 
         init_msg = " and initialized" if options.get("init", False) else ""
         remote_msg = " from remote" if options.get("remote", False) else ""
-        OutputFormatter.instance().success(f"Updated submodules{init_msg}{remote_msg}")
+        _formatter().success(f"Updated submodules{init_msg}{remote_msg}")
 
 
 class ConfigureHandler(CommandHandler):
@@ -60,7 +71,7 @@ class ConfigureHandler(CommandHandler):
         manifest = self.orchestrator.generate_manifest(
             root_path, False)
 
-        OutputFormatter.instance().success(f"Repository configured according to manifest")
+        _formatter().success(f"Repository configured according to manifest")
 
 
 class CommitHandler(CommandHandler):
@@ -74,7 +85,26 @@ class CommitHandler(CommandHandler):
             raise ValueError("Commit message is required")
 
         self.orchestrator.commit_changes(message, root_path)
-        OutputFormatter.instance().success(f"Committed changes: {message}")
+        _formatter().success(f"Committed changes: {message}")
+
+
+class StatusHandler(CommandHandler):
+    """Handler for 'status' command (dry-run diff manifest vs repository)."""
+
+    def execute(self, options: Dict[str, Any]) -> None:
+        root_path = Path.cwd()
+
+        report = self.orchestrator.status_report(root_path)
+
+        if not report:
+            _formatter().info("No submodules declared in the manifest")
+            return
+
+        _formatter().table(
+            ["Status", "Path", "Name", "URL"],
+            [[r.status.name, r.path, r.name or "-", r.url or "-"] for r in report],
+            title="Manifest vs repository")
+        _formatter().success("Status computed")
 
 
 class PushHandler(CommandHandler):
@@ -83,7 +113,7 @@ class PushHandler(CommandHandler):
     def execute(self, options: Dict[str, Any]) -> None:
 
         self.orchestrator.push_changes()
-        OutputFormatter.instance().success("Pushed all changes to remote")
+        _formatter().success("Pushed all changes to remote")
 
 
 __all__ = [
@@ -91,6 +121,7 @@ __all__ = [
     "GenerateHandler",
     "UpdateHandler",
     "ConfigureHandler",
+    "StatusHandler",
     "CommitHandler",
     "PushHandler",
 ]

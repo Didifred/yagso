@@ -14,8 +14,8 @@ class Bom:
     version: str = "1.1"
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'Manifest':
-        """Create Manifest from dictionary representation."""
+    def from_dict(cls, data: dict) -> 'Bom':
+        """Create Bom from dictionary representation."""
         version = data.get("version", "1.0")
         submodules = [SubmoduleDefinition.from_dict(s, True) for s in data.get("submodules", [])]
 

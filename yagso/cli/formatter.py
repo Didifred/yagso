@@ -46,6 +46,16 @@ class OutputFormatter:
         """Display an informational message."""
         self._console.print(f"[blue]ℹ[/blue] {message}")
 
+    def table(self, headers: list, rows: list, title: Optional[str] = None) -> None:
+        """Display a tabular report."""
+        from rich.table import Table
+        table = Table(title=title, show_header=True, header_style="bold")
+        for header in headers:
+            table.add_column(header)
+        for row in rows:
+            table.add_row(*[str(cell) for cell in row])
+        self._console.print(table)
+
     def progress(self, current: int, total: int, message: str) -> None:
         """Display a Rich-based progress bar."""
         if self._progress is None:

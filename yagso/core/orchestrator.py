@@ -8,7 +8,6 @@ from ..domain.manifest import Manifest
 from ..domain.submodule import SubmoduleDefinition
 from ..infrastructure.git_ops import GitOperations
 from ..infrastructure.manifest_manager import ManifestManager
-from ..cli.formatter import OutputFormatter
 
 
 class DiffStatus(Enum):
@@ -24,6 +23,15 @@ class DiffStatus(Enum):
 class SearchResult:
     status: DiffStatus
     name: str
+
+
+@dataclass
+class StatusEntry:
+    """One submodule's dry-run status vs the repository state."""
+    status: DiffStatus
+    path: str
+    name: Optional[str] = None
+    url: Optional[str] = None
 
 
 class SubmoduleOrchestrator:
@@ -153,6 +161,9 @@ class SubmoduleOrchestrator:
                 self.manifest_manager.progress_current += 1
 
                 progress_message = f"Configuring {submodule.root_path}"
+                # Imported lazily to keep the core layer free of a hard
+                # dependency on the presentation layer (breaks an import cycle).
+                from ..cli.formatter import OutputFormatter
                 OutputFormatter.instance().progress(
                     self.manifest_manager.progress_current,
                     self.manifest_manager.progress_total,
@@ -183,54 +194,142 @@ class SubmoduleOrchestrator:
         return sum(1 + self._count_submodules(submodule.submodules) for submodule in submodules)
 
     def _search_submodule(self, submodule: SubmoduleDefinition, blocks: list) -> SearchResult:
-        """Search for a submodule by path/url in the manifest submodule blocks and determine its
-        status compared to the current repository state.
+        """Search for a submodule by path/url in the .gitmodules blocks and
+        determine its status compared to the current repository state.
+
+        The primary key of a ``.gitmodules`` entry is its ``path``.  A block
+        whose path matches the manifest path is handled first:
+
+        * path + url + commit + name + branch all match → UNCHANGED
+        * path matches but url/commit/name/branch differ → MODIFIED
+        * path matches, url differs but resolves to the same remote
+          (https <-> ssh) → MODIFIED
+        * path matches but the url refers to a genuinely different
+          repository → ADDED (the old block is left in place so the caller's
+          removal pass can drop it)
+
+        When no block has the manifest path, a block with the same url,
+        commit AND name at a different path is treated as MOVED — the name
+        comparison is made against the *current* block, never against state
+        left over from a previous iteration.
+
+        The matched block is removed from ``blocks`` so callers can treat
+        the leftovers as REMOVED submodules.
 
         Args:
-            submodule (SubmoduleDefinition): Submodule definition from the manifest to search for.
+            submodule (SubmoduleDefinition): Submodule definition from the
+                manifest to search for.
             blocks (list): current submodule definitions from .gitmodules
 
         Returns:
-            SearchResult: indicating if the submodule is unchanged, modified, added; and its name
+            SearchResult: indicating if the submodule is unchanged, modified,
+                moved or added; and the name of the matching .gitmodules entry
+                when one exists.
         """
 
-        git_name = ""
-        status = DiffStatus.ADDED  # Default to added if not found
-
+        # Pass 1: look for the block whose path matches the manifest path.
         for block in blocks:
-            if block.get("path") == submodule.path:
-                git_name = block.get("name")
-                if (block.get("url") == submodule.url):
-                    if (block.get("commit") == submodule.commit) \
-                            and (git_name == submodule.name) \
-                            and (block.get("branch") == submodule.tracking_branch):
-                        blocks.remove(block)
-                        status = DiffStatus.UNCHANGED
-                        return SearchResult(DiffStatus.UNCHANGED, git_name)
-                    else:
-                        blocks.remove(block)
-                        status = DiffStatus.MODIFIED
-                else:
-                    # URL change but same repo (eg ssh <-> https)
-                    if GitOperations.is_same_repo(block.get("url", ""), submodule.url):
-                        blocks.remove(block)
-                        status = DiffStatus.MODIFIED
-                    else:
-                        status = DiffStatus.ADDED
-                        git_name = submodule.name
-            else:
-                # Check if same url but different path (moved)
-                if (block.get("url") == submodule.url) \
-                        and (block.get("commit") == submodule.commit) \
-                        and (git_name == submodule.name):
-                    blocks.remove(block)
-                    status = DiffStatus.MOVED
-                else:
-                    status = DiffStatus.ADDED
-                    git_name = submodule.name
+            if block.get("path") != submodule.path:
+                continue
 
-        return SearchResult(status, git_name)
+            git_name = block.get("name")
+
+            if block.get("url") == submodule.url:
+                # Same URL: unchanged only when commit, name and branch match.
+                if (block.get("commit") == submodule.commit) \
+                        and (git_name == submodule.name) \
+                        and (block.get("branch") == submodule.tracking_branch):
+                    blocks.remove(block)
+                    return SearchResult(DiffStatus.UNCHANGED, git_name)
+                blocks.remove(block)
+                return SearchResult(DiffStatus.MODIFIED, git_name)
+
+            # URL changed but same repository (eg ssh <-> https)
+            if GitOperations.is_same_repo(block.get("url", ""), submodule.url or ""):
+                blocks.remove(block)
+                return SearchResult(DiffStatus.MODIFIED, git_name)
+
+            # URL refers to a different repository: leave the old block in
+            # place so the caller's removal pass drops it, then re-add.
+            return SearchResult(DiffStatus.ADDED, submodule.name or "")
+
+        # Pass 2: no path match — a block with the same url, commit and name
+        # at a different path is a moved submodule.
+        for block in blocks:
+            if (block.get("url") == submodule.url) \
+                    and (block.get("commit") == submodule.commit) \
+                    and (block.get("name") == submodule.name):
+                blocks.remove(block)
+                return SearchResult(DiffStatus.MOVED, block.get("name") or "")
+
+        return SearchResult(DiffStatus.ADDED, submodule.name or "")
 
     def push_changes(self) -> None:
         """Push all commits to remote."""
-        # self.git_ops.push_all()
+        with GitOperations(self.repo_path) as git_ops:
+            git_ops.push_all()
+
+    def status_report(self, root_path: Optional[Path] = None) -> List[StatusEntry]:
+        """Dry-run diff between the manifest (yagso.yaml) and the repository.
+
+        For every submodule declared in the manifest the repository state is
+        classified (UNCHANGED / MODIFIED / MOVED / ADDED); .gitmodules blocks
+        with no manifest counterpart are reported as REMOVED. Nothing is
+        written — this is a read-only preview of what ``configure`` would do.
+
+        Args:
+            root_path (Optional[Path]): The root directory of the repository.
+                If not provided, defaults to the repository path set during
+                initialization.
+
+        Raises:
+            FileNotFoundError: If the yagso.yaml manifest file does not exist
+                in the specified root path.
+
+        Returns:
+            List[StatusEntry]: One entry per manifest submodule plus one per
+                orphaned .gitmodules block (REMOVED).
+        """
+        if root_path is None:
+            root_path = self.repo_path
+
+        manifest_path = root_path / "yagso.yaml"
+        if not manifest_path.exists():
+            raise FileNotFoundError("yagso.yaml manifest not found. Run 'yagso generate' first.")
+
+        manifest = self.manifest_manager.load_manifest(manifest_path)
+        manifest.validate()
+
+        with GitOperations(root_path) as git_ops:
+            blocks = git_ops.read_gitmodules_blocks()
+
+        return self._diff_manifest(manifest, blocks)
+
+    def _diff_manifest(self, manifest: Manifest, blocks: list) -> List[StatusEntry]:
+        """Classify every manifest submodule against the .gitmodules blocks.
+
+        Mutates ``blocks`` the same way ``_sync_child_submodules`` does: each
+        matched block is removed, so blocks left over at the end are orphans
+        (REMOVED submodules).
+        """
+        report: List[StatusEntry] = []
+
+        for submodule in manifest.submodules:
+            result = self._search_submodule(submodule, blocks)
+            report.append(StatusEntry(
+                status=result.status,
+                path=submodule.root_path,
+                name=submodule.name,
+                url=submodule.url,
+            ))
+
+        # Any block that survived the search has no manifest counterpart.
+        for block in blocks:
+            report.append(StatusEntry(
+                status=DiffStatus.REMOVED,
+                path=block.get("path", ""),
+                name=block.get("name"),
+                url=block.get("url"),
+            ))
+
+        return report
