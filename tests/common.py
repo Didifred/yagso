@@ -5,14 +5,19 @@ sample repository used across tests. Tests that need this behaviour should
 inherit from `BaseGitTest`.
 """
 import unittest
+import os
 import gc
 from pathlib import Path
 from yagso.infrastructure.git_ops import GitOperations
-import os
 from scripts.watcher_toggle import WatcherToggle
 
 
 class BaseGitTest(unittest.TestCase):
+    """Base test case that resets a shared git-backed sample repository.
+
+    Each test gets a clean repository state and a stable working directory.
+    """
+
     @classmethod
     def setUpClass(cls):
         """Set up test repository state once for all tests.
