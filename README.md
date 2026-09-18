@@ -41,14 +41,14 @@ To build the Python package, ensure you have Python 3.8+ installed and follow th
    ```
 
 This will create distribution files in the `dist/` directory:
-- `yagso-0.1.2.tar.gz` (source distribution)
-- `yagso-0.1.2-py3-none-any.whl` (wheel)
+- `yagso-0.1.6.tar.gz` (source distribution)
+- `yagso-0.1.6-py3-none-any.whl` (wheel)
 
 ## Installation
 
 Install the package using pip:
 ```bash
-pip install --force-reinstall dist/yagso-0.1.2-py3-none-any.whl
+pip install --force-reinstall dist/yagso-0.1.6-py3-none-any.whl
 ```
 
 - On linux, like pip warns, you may need to add to path the local bin path, for example : 
@@ -81,6 +81,8 @@ export PATH="$PATH:/home/$(USER)/.local/bin"
 - **`yagso generate --BOM --files <regex>`**: Generates in addition of the maniest, a bill of material BOM.yaml with an optional regex in order to filer files.
 
 - **`yagso configure`**: Applies the manifest configuration to the repository.
+
+- **`yagso status`**: Read-only dry run — reports, for every submodule in the manifest, whether it is unchanged, modified, moved, added or would be removed compared to the current repository state, plus any orphaned `.gitmodules` blocks. Nothing is written; it is a preview of what `configure` would do.
 
 - **`yagso commit --message <msg>`**: Commits changes recursively, including `.gitmodules`, index changes, and the manifest file itself.
 

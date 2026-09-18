@@ -9,7 +9,6 @@ from .git_ops import GitOperations
 from ..domain.manifest import Manifest
 from ..domain.bom import Bom
 from ..domain.submodule import SubmoduleDefinition
-from ..cli.formatter import OutputFormatter
 
 
 class ManifestManager:
@@ -45,25 +44,29 @@ class ManifestManager:
 
         setattr(submodule, field_name, field_value)
 
-    def get_submodule_field(self, manifest: Manifest, root_path: str, field_name: str) -> Any:
+    def get_submodule_field(self, target, root_path: str, field_name: str) -> Any:
         """Get a specific field of a submodule identified by root_path.
 
+        ``target`` may be either a ``Manifest`` (yagso.yaml) or a ``Bom``
+        (BOM.yaml) — both expose a ``submodules`` tree.
+
         Args:
-            manifest (Manifest): The manifest to query
-            root_path (str): The root_path of the submodule to query
-            field_name (str): The field name to retrieve (e.g., 'commit', 'url', 'tracking_branch')
+            target: The Manifest or Bom to query.
+            root_path (str): The root_path of the submodule to query.
+            field_name (str): The field name to retrieve (e.g. 'commit', 'url',
+                'tracking_branch').
 
         Raises:
-            ValueError: Submodule not found with the specified root_path
-            ValueError: Invalid field name for SubmoduleDefinition
+            FileNotFoundError: Submodule not found with the specified root_path.
+            ValueError: Invalid field name for SubmoduleDefinition.
 
         Returns:
-            The value of the specified field for the submodule
+            The value of the specified field for the submodule.
         """
-        submodule = self._find_submodule_by_root_path(manifest.submodules, root_path)
+        submodule = self._find_submodule_by_root_path(target.submodules, root_path)
 
         if not submodule:
-            raise ValueError(f"Submodule not found with root_path: {root_path}")
+            raise FileNotFoundError(f"Submodule not found with root_path: {root_path}")
 
         if not hasattr(submodule, field_name):
             raise ValueError(
@@ -254,6 +257,9 @@ class ManifestManager:
         path = block.get("path", name)
         url = block.get("url", "")
 
+        # Imported lazily to keep the infrastructure layer free of a hard
+        # dependency on the presentation layer (breaks an import cycle).
+        from ..cli.formatter import OutputFormatter
         OutputFormatter.instance().progress(self.progress_current, self.progress_total,
                                             f"Parsing {path}")
 
@@ -439,29 +445,3 @@ class ManifestManager:
                 return Bom.from_dict(data)
         except yaml.YAMLError as e:
             raise ValueError(f"Invalid YAML in manifest: {e}") from e
-
-    def get_submodule_field(self, bom: Bom, root_path: str, field_name: str) -> Any:
-        """Get a specific field of a submodule identified by root_path.
-
-        Args:
-            bom (Bom): The manifest to query
-            root_path (str): The root_path of the submodule to query
-            field_name (str): The field name to retrieve (e.g., 'commit', 'url', 'tracking_branch')
-
-        Raises:
-            FileNotFoundError: Submodule not found with the specified root_path
-            ValueError: Invalid field name for SubmoduleDefinition
-
-        Returns:
-            The value of the specified field for the submodule
-        """
-        submodule = self._find_submodule_by_root_path(bom.submodules, root_path)
-
-        if not submodule:
-            raise FileNotFoundError(f"Submodule not found with root_path: {root_path}")
-
-        if not hasattr(submodule, field_name):
-            raise ValueError(
-                f"Invalid field name '{field_name}' for SubmoduleDefinition")
-
-        return getattr(submodule, field_name)
