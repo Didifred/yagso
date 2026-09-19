@@ -48,7 +48,7 @@ This will create distribution files in the `dist/` directory:
 
 Install the package using pip:
 ```bash
-pip install --force-reinstall dist/yagso-0.1.6-py3-none-any.whl
+pip install --force-reinstall yagso-0.1.6-py3-none-any.whl
 ```
 
 - On linux, like pip warns, you may need to add to path the local bin path, for example : 
