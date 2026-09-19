@@ -2,21 +2,36 @@
 import os
 import re
 import stat
-import git
 import shutil
+import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+import git
 from git import Repo, Submodule, Git
 from git.config import GitConfigParser
 
 from ..domain.submodule import SubmoduleDefinition
 
 
-def _remove_readonly(func, path, exc_info):
+def _remove_readonly(func, path, _exc):
     """Reset read-only bits and retry filesystem removals."""
     os.chmod(path, stat.S_IWRITE)
     func(path)
 
+
+if sys.version_info >= (3, 12):
+    def rmtree(path):
+        """Remove a directory tree, ignoring read-only errors."""
+        shutil.rmtree(path, onexc=_remove_readonly)
+else:
+    # Python 3.11 and earlier do not support onexc argument, so we need to
+    # define a custom rmtree function
+    def rmtree(path):
+        """Remove a directory tree, ignoring read-only errors """
+        # onerror receives sys.exc_info() tuple → extract instance at [1]
+        # pylint: disable=deprecated-argument
+        shutil.rmtree(path, onerror=lambda f, p, e: _remove_readonly(f, p, e[1]))
+        # pylint: enable=deprecated-argument
 
 # Workaround: During Python interpreter shutdown on Windows, GitPython's
 # AutoInterrupt destructor can invoke logging internals that may already be
@@ -24,6 +39,7 @@ def _remove_readonly(func, path, exc_info):
 # noisy traceback we monkeypatch a safe __del__ wrapper that swallows any
 # exception raised during finalization. This is a runtime-only workaround
 # that keeps third-party site-packages untouched on disk.
+# pylint: disable=protected-access
 try:
     import git.cmd as _git_cmd
 
@@ -40,6 +56,7 @@ try:
 except Exception:
     # If anything goes wrong importing or monkeypatching, don't fail import.
     pass
+# pylint: enable=protected-access
 
 
 class GitOperations:
@@ -94,7 +111,8 @@ class GitOperations:
         g = Git()
         g.update_environment(
             GIT_TERMINAL_PROMPT="0",  # kills interactive HTTP/HTTPS prompts
-            GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10",  # kills SSH prompts + adds TCP timeout
+            # kills SSH prompts + adds TCP timeout
+            GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10",
         )
         try:
             references = g.ls_remote(url, 'HEAD').strip()
@@ -133,8 +151,8 @@ class GitOperations:
 
     @staticmethod
     def _strip_ref_prefix(ref: str) -> str:
-        _PREFIXES = ("refs/heads/", "refs/tags/", "refs/remotes/")
-        for prefix in _PREFIXES:
+        _prefixes = ("refs/heads/", "refs/tags/", "refs/remotes/")
+        for prefix in _prefixes:
             if ref.startswith(prefix):
                 return ref[len(prefix):]
         return ref
@@ -448,7 +466,7 @@ class GitOperations:
                 sub_repo.git.checkout(commit_sha)
 
                 # Update recusively if the submodule has nested submodules
-                if (bool(sub_repo.submodules)):
+                if bool(sub_repo.submodules):
                     sub_repo.git.submodule('update', '--init', '--recursive')
 
                 # Stage .gitmodules
@@ -567,7 +585,7 @@ class GitOperations:
             if stage_index:
                 try:
                     # Update recusively if the submodule has nested submodules
-                    if (bool(sub_repo.submodules)):
+                    if bool(sub_repo.submodules):
                         sub_repo.git.submodule('update', '--init', '--recursive')
 
                     self.repo.git.add(submodule_def.path)
@@ -746,7 +764,7 @@ class GitOperations:
         # Delete the 'modules' directory entirely if present
         try:
             if modules_dir.exists():
-                shutil.rmtree(modules_dir, onerror=_remove_readonly)
+                rmtree(modules_dir)
         except (OSError, shutil.Error) as e:
             raise RuntimeError(f"Failed to delete modules directory {modules_dir}: {e}") from e
 
@@ -773,7 +791,7 @@ class GitOperations:
         submodule_folders.sort(key=lambda p: len(p.parts))
         for folder in submodule_folders:
             if folder.exists() and folder != self.repo_path:
-                shutil.rmtree(folder, onerror=_remove_readonly)
+                rmtree(folder)
 
         # Init: registers submodules in .git/config (writes into main repo's
         # config via the gitfile)
@@ -798,7 +816,7 @@ class GitOperations:
         try:
             if modules_dir.exists():
                 if backup_modules_dir.exists():
-                    shutil.rmtree(backup_modules_dir, onerror=_remove_readonly)
+                    rmtree(backup_modules_dir)
                 shutil.copytree(modules_dir, backup_modules_dir, symlinks=True)
         except Exception as e:
             raise RuntimeError(
@@ -825,7 +843,7 @@ class GitOperations:
         try:
             if backup_modules_dir.exists():
                 if modules_dir.exists():
-                    shutil.rmtree(modules_dir, onerror=_remove_readonly)
+                    rmtree(modules_dir)
                 shutil.copytree(backup_modules_dir, modules_dir, symlinks=True)
         except Exception as e:
             raise RuntimeError(
@@ -1095,19 +1113,18 @@ class OrderedGitConfigParser(GitConfigParser):
 
     def write(self, fp=None):
         """Write config with ordered fields"""
-        should_close = False
 
         if fp is None:
-            fp = open(self._file_or_files, 'w')
-            should_close = True
-
-        try:
-            self._write_ordered(fp)
-        except IOError as e:
-            raise IOError(f"Failed to write config file: {e}") from e
-        finally:
-            if should_close:
-                fp.close()
+            with open(self._file_or_files, 'w', encoding='utf-8') as fp:
+                try:
+                    self._write_ordered(fp)
+                except IOError as e:
+                    raise IOError(f"Failed to write config file: {e}") from e
+        else:
+            try:
+                self._write_ordered(fp)
+            except IOError as e:
+                raise IOError(f"Failed to write config file: {e}") from e
 
     def _write_ordered(self, fp):
         """Write sections with ordered fields"""

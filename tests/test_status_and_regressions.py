@@ -5,7 +5,6 @@ integration tests live in test_cli.py / test_git_ops.py. The `_search_submodule`
 rewrite and the merged `get_submodule_field` are pure logic over dicts, so they
 are exercised here directly.
 """
-import copy
 import unittest
 import tempfile
 from pathlib import Path
@@ -19,6 +18,8 @@ from yagso.domain.manifest import Manifest
 from yagso.domain.bom import Bom
 from yagso.domain.submodule import SubmoduleDefinition
 from yagso.infrastructure.manifest_manager import ManifestManager
+
+# pylint: skip-file
 
 
 def _sub(name="lib1", path="lib1", url="https://github.com/a/b.git",
@@ -114,10 +115,16 @@ class TestSearchSubmodule(unittest.TestCase):
         # was misclassified as MOVED and removed from the blocks list.
         # Here B2 has a different name and must NOT be consumed.
         blocks = [
-            _block(path="lib1", name="lib1",
-                   url="https://github.com/a/b.git", commit="c1111111111111111111111111111111111111111"),
-            _block(path="lib2", name="lib2",
-                   url="https://github.com/a/b.git", commit="c1111111111111111111111111111111111111111"),
+            _block(
+                path="lib1",
+                name="lib1",
+                url="https://github.com/a/b.git",
+                commit="c1111111111111111111111111111111111111111"),
+            _block(
+                path="lib2",
+                name="lib2",
+                url="https://github.com/a/b.git",
+                commit="c1111111111111111111111111111111111111111"),
         ]
         sub = _sub(path="moved/lib1", name="lib1")
         result = self.orch._search_submodule(sub, blocks)
@@ -168,6 +175,28 @@ class TestStatusReport(unittest.TestCase):
         by_path = {r.path: r.status for r in report}
         self.assertEqual(by_path["lib1"], DiffStatus.MODIFIED)
         self.assertEqual(by_path["libs/newlib"], DiffStatus.ADDED)
+
+    def test_nested_status_report_recurses(self):
+        parent = _sub(name="outer", path="outer",
+                      url="https://github.com/a/b.git")
+        child = _sub(name="inner", path="inner",
+                     url="https://github.com/a/c.git")
+        parent.submodules = [child]
+        top_blocks = [_block(name="outer", path="outer",
+                             url="https://github.com/a/b.git",
+                             commit=parent.commit)]
+
+        with patch("yagso.core.orchestrator.GitOperations.read_gitmodules_blocks",
+                   side_effect=[top_blocks, []]):
+            report = self.orch._diff_manifest(
+                self._manifest(parent),
+                list(top_blocks),
+                root_path=Path("/repo"),
+            )
+
+        by_path = {r.path: r.status for r in report}
+        self.assertEqual(by_path["outer"], DiffStatus.UNCHANGED)
+        self.assertEqual(by_path["inner"], DiffStatus.ADDED)
 
     def test_status_report_missing_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
