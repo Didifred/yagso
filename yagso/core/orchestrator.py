@@ -28,12 +28,10 @@ class SearchResult:
 
 
 @dataclass
-class StatusEntry:
-    """One submodule's dry-run status vs the repository state."""
-    status: DiffStatus
-    path: str
-    name: Optional[str] = None
-    url: Optional[str] = None
+class PropertyChange:
+    """Represents a change in a submodule property."""
+    repo_state: str
+    manifest: str
 
 
 class SubmoduleOrchestrator:
@@ -120,14 +118,12 @@ class SubmoduleOrchestrator:
             raise FileNotFoundError("yagso.yaml manifest not found. Run 'yagso generate' first.")
 
         manifest = self.manifest_manager.load_manifest(manifest_path)
-
-        # Validate the manifest before applying configuration
         manifest.validate()
 
         # Sync submodules with manifest configuration (e.g., .gitmodules, .git/config)
         self.manifest_manager.progress_total = self._count_submodules(manifest.submodules)
         self.manifest_manager.progress_current = 0
-        self._sync_submodules(root_path, manifest)
+        self._sync_submodules(root_path, manifest.submodules)
 
     def commit_changes(self, message: str, root_path: Optional[Path] = None) -> None:
         """Commit all changes recursively."""
@@ -140,19 +136,9 @@ class SubmoduleOrchestrator:
 
     def _sync_submodules(
             self,
-            root_path,
-            manifest: Manifest) -> None:
-        """Sync submodules with manifest. """
-
-        submodules = manifest.submodules
-
-        self._sync_child_submodules(root_path, submodules)
-
-    def _sync_child_submodules(
-            self,
             root_path: Path,
             submodules: List[SubmoduleDefinition]) -> None:
-        """Recursively sync child submodules with manifest."""
+        """Recursively sync submodules with manifest."""
 
         childs = []
 
@@ -187,9 +173,8 @@ class SubmoduleOrchestrator:
                 git_ops.remove_submodule(block)
 
             for submodule in childs:
-                new_root = root_path / Path(submodule.path)
-                self._sync_child_submodules(
-                    new_root, submodule.submodules)
+                child_root = root_path / Path(submodule.path)
+                self._sync_submodules(child_root, submodule.submodules)
 
     def _count_submodules(self, submodules: List[SubmoduleDefinition]) -> int:
         """Count all submodules in a manifest, including nested definitions."""
@@ -243,18 +228,18 @@ class SubmoduleOrchestrator:
                         and (block.get("branch") == submodule.tracking_branch):
                     blocks.remove(block)
                     return SearchResult(DiffStatus.UNCHANGED, git_name)
-                else:
-                    blocks.remove(block)
-                    return SearchResult(DiffStatus.MODIFIED, git_name)
-            else:
-                # URL changed but same repository (eg ssh <-> https)
-                if GitOperations.is_same_repo(block.get("url", ""), submodule.url or ""):
-                    blocks.remove(block)
-                    return SearchResult(DiffStatus.MODIFIED, git_name)
-                else:
-                    # URL refers to a different repository: leave the old block in
-                    # place so the caller's removal pass drops it, then re-add.
-                    return SearchResult(DiffStatus.ADDED, submodule.name or "")
+
+                # else: path + url match but commit/name/branch differ → modified
+                blocks.remove(block)
+                return SearchResult(DiffStatus.MODIFIED, git_name)
+
+            # URL changed but same repository (eg ssh <-> https)
+            if GitOperations.is_same_repo(block.get("url", ""), submodule.url or ""):
+                blocks.remove(block)
+                return SearchResult(DiffStatus.MODIFIED, git_name)
+            # else: URL refers to a different repository: leave the old block in
+            # place so the caller's removal pass drops it, then re-add.
+            return SearchResult(DiffStatus.ADDED, submodule.name or "")
 
         # Pass 2: no path match — a block with the same url, commit and name
         # at a different path is a moved submodule.
@@ -270,11 +255,10 @@ class SubmoduleOrchestrator:
 
     def push_changes(self) -> None:
         """Push all commits to remote."""
-        # Not implemented yet.
-        # with GitOperations(self.repo_path) as git_ops:
-        #    git_ops.push_all()
+        with GitOperations(self.repo_path) as git_ops:
+            git_ops.push_all()
 
-    def status_report(self, root_path: Optional[Path] = None) -> List[StatusEntry]:
+    def status_report(self, root_path: Optional[Path] = None) -> None:
         """Dry-run diff between the manifest (yagso.yaml) and the repository.
 
         For every submodule declared in the manifest the repository state is
@@ -290,10 +274,6 @@ class SubmoduleOrchestrator:
         Raises:
             FileNotFoundError: If the yagso.yaml manifest file does not exist
                 in the specified root path.
-
-        Returns:
-            List[StatusEntry]: One entry per manifest submodule plus one per
-                orphaned .gitmodules block (REMOVED).
         """
         if root_path is None:
             root_path = self.repo_path
@@ -305,36 +285,59 @@ class SubmoduleOrchestrator:
         manifest = self.manifest_manager.load_manifest(manifest_path)
         manifest.validate()
 
+        self.output.info("Repository state vs manifest definition")
+        self._diff_manifest(root_path, manifest.submodules)
+
+    def _diff_manifest(
+            self,
+            root_path: Path,
+            submodules: List[SubmoduleDefinition]) -> None:
+        """Classify manifest submodules against the current .gitmodules blocks.
+
+        This mirrors the recursion used by ``_sync_child_submodules``: each
+        level consumes the matching blocks for its own repository, appends any
+        orphan blocks as REMOVED, then descends into nested submodules in their
+        child repositories.
+        """
+
+        childs = []
+
         with GitOperations(root_path) as git_ops:
             blocks = git_ops.read_gitmodules_blocks()
 
-        return self._diff_manifest(manifest, blocks)
+            for submodule in submodules:
+                search_result = self._search_submodule(submodule, blocks)
 
-    def _diff_manifest(self, manifest: Manifest, blocks: list) -> List[StatusEntry]:
-        """Classify every manifest submodule against the .gitmodules blocks.
+                if search_result.status == DiffStatus.MODIFIED:
+                    self._print_sync_submodule(submodule, search_result.name)
+                elif search_result.status == DiffStatus.MOVED:
+                    self._print_move_submodule(search_result.name, submodule.path)
+                elif search_result.status == DiffStatus.ADDED:
+                    self._print_add_submodule(submodule)
 
-        Mutates ``blocks`` the same way ``_sync_child_submodules`` does: each
-        matched block is removed, so blocks left over at the end are orphans
-        (REMOVED submodules).
-        """
-        report: List[StatusEntry] = []
+                if submodule.submodules:
+                    childs.append(submodule)
+            # end for submodule in submodules
 
-        for submodule in manifest.submodules:
-            result = self._search_submodule(submodule, blocks)
-            report.append(StatusEntry(
-                status=result.status,
-                path=submodule.root_path,
-                name=submodule.name,
-                url=submodule.url,
-            ))
+            # Remaining blocks that were not matched are removed submodules
+            for block in blocks:
+                self._print_remove_submodule(block)
 
-        # Any block that survived the search has no manifest counterpart.
-        for block in blocks:
-            report.append(StatusEntry(
-                status=DiffStatus.REMOVED,
-                path=block.get("path", ""),
-                name=block.get("name"),
-                url=block.get("url"),
-            ))
+            for submodule in childs:
+                child_root = root_path / Path(submodule.path)
+                self._diff_manifest(child_root, submodule.submodules)
 
-        return report
+    def _print_sync_submodule(self, submodule_def: SubmoduleDefinition, name: str) -> None:
+        self.output.print(f"module {submodule_def.path} with name {name} MODIFIED :")
+        # TODO print the properties modified
+
+    def _print_move_submodule(self, name: str, new_path: str) -> None:
+        self.output.print(f"module {name} MOVED to {new_path}")
+
+    def _print_add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
+        self.output.print(f"module {submodule_def.path} ADDED at {submodule_def.root_path}")
+
+    def _print_remove_submodule(self, block: Dict[str, Any]) -> None:
+        name = block.get('name')
+        path = block.get('path')
+        self.output.print(f"module {path} with name {name} REMOVED")

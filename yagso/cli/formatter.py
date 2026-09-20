@@ -1,10 +1,7 @@
 """CLI output formatting with Rich."""
 
-from typing import Optional
-
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn
-from rich.table import Table
 
 
 class OutputFormatter:
@@ -27,6 +24,10 @@ class OutputFormatter:
         self._task_id = None
         self._bar_column = None
 
+    def print(self, message: str) -> None:
+        """Simple print."""
+        self._console.print(message)
+
     def success(self, message: str) -> None:
         """Display a success message."""
         self._console.print(f"[green]✓[/green] {message}")
@@ -46,16 +47,6 @@ class OutputFormatter:
     def info(self, message: str) -> None:
         """Display an informational message."""
         self._console.print(f"[blue]ℹ[/blue] {message}")
-
-    def table(self, headers: list, rows: list, title: Optional[str] = None) -> None:
-        """Display a tabular report."""
-
-        table = Table(title=title, show_header=True, header_style="bold")
-        for header in headers:
-            table.add_column(header)
-        for row in rows:
-            table.add_row(*[str(cell) for cell in row])
-        self._console.print(table)
 
     def progress(self, current: int, total: int, message: str) -> None:
         """Display a Rich-based progress bar."""

@@ -1,10 +1,13 @@
 """Output ports shared by application layers and presentation adapters."""
 
-from typing import List, Optional, Protocol
+from typing import Protocol
 
 
 class OutputPort(Protocol):
     """Interface used by YAGSO layers to report command output."""
+
+    def print(self, messsage: str) -> None:
+        """Simple print on terminal."""
 
     def success(self, message: str) -> None:
         """Report a successful operation."""
@@ -18,13 +21,12 @@ class OutputPort(Protocol):
     def progress(self, current: int, total: int, message: str) -> None:
         """Report operation progress."""
 
-    def table(self, headers: List[str], rows: List[List[str]],
-              title: Optional[str] = None) -> None:
-        """Report tabular output."""
-
 
 class NullOutput:
     """Output implementation for library callers that do not need display output."""
+
+    def print(self, messsage: str) -> None:
+        """Simple print on terminal."""
 
     def success(self, message: str) -> None:
         """Ignore success output."""
@@ -37,10 +39,6 @@ class NullOutput:
 
     def progress(self, current: int, total: int, message: str) -> None:
         """Ignore progress output."""
-
-    def table(self, headers: List[str], rows: List[List[str]],
-              title: Optional[str] = None) -> None:
-        """Ignore tabular output."""
 
 
 __all__ = ["OutputPort", "NullOutput"]

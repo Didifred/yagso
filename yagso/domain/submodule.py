@@ -12,7 +12,8 @@ class SubmoduleDefinition:
     path: str
     name: Optional[str] = None
     url: Optional[str] = None
-    """ The branch to track for this submodule (.gitmodules property). Defaults to None if not specified. """
+    """ The branch to track for this submodule (.gitmodules property).
+    Defaults to None if not specified. """
     tracking_branch: Optional[str] = None
     """ The branch checkouted for this submodule. Defaults to None if detached HEAD. """
     active_branch: Optional[str] = None

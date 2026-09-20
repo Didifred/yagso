@@ -1,10 +1,9 @@
+"""Test git_ops """
 import unittest
 import tempfile
-import git
-from unittest.mock import patch
 from pathlib import Path
 
-from git import Repo
+import git
 
 from yagso.infrastructure.git_ops import GitOperations
 from yagso.domain.submodule import SubmoduleDefinition
