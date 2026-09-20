@@ -1,3 +1,4 @@
+"""Integration test of yagso cli commands """
 import unittest
 import copy
 from io import StringIO

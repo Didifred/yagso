@@ -80,21 +80,12 @@ class CommitHandler(CommandHandler):
 
 
 class StatusHandler(CommandHandler):
-    """Handler for 'status' command (dry-run diff manifest vs repository)."""
+    """Handler for 'status' command (dry-run diff repository vs manifest)."""
 
     def execute(self, options: Dict[str, Any]) -> None:
         root_path = Path.cwd()
 
-        report = self.orchestrator.status_report(root_path)
-
-        if not report:
-            self.output.info("No submodules declared in the manifest")
-            return
-
-        self.output.table(
-            ["Status", "Path", "Name", "URL"],
-            [[r.status.name, r.path, r.name or "-", r.url or "-"] for r in report],
-            title="Manifest vs repository")
+        self.orchestrator.status_report(root_path)
         self.output.success("Status computed")
 
 
