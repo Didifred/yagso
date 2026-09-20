@@ -2,6 +2,7 @@
 import unittest
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import git
 
@@ -172,6 +173,46 @@ class TestGitOps(BaseGitTest):
                 self.assertIn(branch_name, [b.name for b in repo.branches])
                 self.assertEqual(repo.head.commit.hexsha, commit.hexsha)
 
+            finally:
+                repo.close()
+
+
+class TestUpdateDefaults(unittest.TestCase):
+
+    def test_update_defaults_to_no_init(self):
+        ops = GitOperations.__new__(GitOperations)
+        ops._repo = MagicMock()
+        repo = ops._repo
+
+        ops.update_all_submodules({})
+        repo.git.submodule.assert_called_once_with("update", "--recursive")
+
+        ops.update_all_submodules({"init": True})
+        repo.git.submodule.assert_called_with("update", "--init", "--recursive")
+
+        ops.update_all_submodules({"init": True, "remote": True})
+        repo.git.submodule.assert_called_with(
+            "update", "--init", "--remote", "--recursive")
+
+
+class TestCommitAllDetachedHead(unittest.TestCase):
+
+    def test_commit_all_raises_on_detached_head(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_path = Path(tmp) / "repo"
+            repo = git.Repo.init(repo_path)
+            try:
+                repo.config_writer().set_value('user', 'name', 'Test').release()
+                repo.config_writer().set_value('user', 'email', 'test@example.com').release()
+                (repo_path / "README.md").write_text("hi\n", encoding="utf-8")
+                repo.index.add(["README.md"])
+                commit = repo.index.commit("initial")
+                repo.git.checkout(commit.hexsha)
+                self.assertTrue(repo.head.is_detached)
+
+                with GitOperations(repo_path) as ops:
+                    with self.assertRaises(RuntimeError):
+                        ops.commit_all("should not commit on detached HEAD")
             finally:
                 repo.close()
 
