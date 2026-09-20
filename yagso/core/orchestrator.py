@@ -25,6 +25,7 @@ class SearchResult:
     """ Represents the result of searching for a submodule in the repo's .gitmodules blocks."""
     status: DiffStatus
     name: str
+    block: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -227,16 +228,16 @@ class SubmoduleOrchestrator:
                         and (git_name == submodule.name) \
                         and (block.get("branch") == submodule.tracking_branch):
                     blocks.remove(block)
-                    return SearchResult(DiffStatus.UNCHANGED, git_name)
+                    return SearchResult(DiffStatus.UNCHANGED, git_name, block)
 
                 # else: path + url match but commit/name/branch differ → modified
                 blocks.remove(block)
-                return SearchResult(DiffStatus.MODIFIED, git_name)
+                return SearchResult(DiffStatus.MODIFIED, git_name, block)
 
             # URL changed but same repository (eg ssh <-> https)
             if GitOperations.is_same_repo(block.get("url", ""), submodule.url or ""):
                 blocks.remove(block)
-                return SearchResult(DiffStatus.MODIFIED, git_name)
+                return SearchResult(DiffStatus.MODIFIED, git_name, block)
             # else: URL refers to a different repository: leave the old block in
             # place so the caller's removal pass drops it, then re-add.
             return SearchResult(DiffStatus.ADDED, submodule.name or "")
@@ -248,7 +249,7 @@ class SubmoduleOrchestrator:
                     and (block.get("commit") == submodule.commit) \
                     and (block.get("name") == submodule.name):
                 blocks.remove(block)
-                return SearchResult(DiffStatus.MOVED, block.get("name") or "")
+                return SearchResult(DiffStatus.MOVED, block.get("name") or "", block)
 
         # No path match, no url+commit+name match — treat as added.
         return SearchResult(DiffStatus.ADDED, submodule.name or "")
@@ -285,7 +286,7 @@ class SubmoduleOrchestrator:
         manifest = self.manifest_manager.load_manifest(manifest_path)
         manifest.validate()
 
-        self.output.info("Repository state vs manifest definition")
+        self.output.info("Repository state vs manifest definition diff")
         self._diff_manifest(root_path, manifest.submodules)
 
     def _diff_manifest(
@@ -309,7 +310,7 @@ class SubmoduleOrchestrator:
                 search_result = self._search_submodule(submodule, blocks)
 
                 if search_result.status == DiffStatus.MODIFIED:
-                    self._print_sync_submodule(submodule, search_result.name)
+                    self._print_sync_submodule(submodule, search_result)
                 elif search_result.status == DiffStatus.MOVED:
                     self._print_move_submodule(search_result.name, submodule.path)
                 elif search_result.status == DiffStatus.ADDED:
@@ -327,17 +328,35 @@ class SubmoduleOrchestrator:
                 child_root = root_path / Path(submodule.path)
                 self._diff_manifest(child_root, submodule.submodules)
 
-    def _print_sync_submodule(self, submodule_def: SubmoduleDefinition, name: str) -> None:
-        self.output.print(f"module {submodule_def.path} with name {name} MODIFIED :")
-        # TODO print the properties modified
+    def _print_sync_submodule(self, submodule_def: SubmoduleDefinition,
+                              search_result: SearchResult) -> None:
+        self.output.info(f"module {submodule_def.path} with name {search_result.name} MODIFIED :")
+
+        current_name = search_result.block.get('name')
+        if current_name != submodule_def.name:
+            self.output.print(f"  name change from {current_name} to {submodule_def.name}")
+
+        current_url = search_result.block.get('name')
+        if current_url != submodule_def.url:
+            self.output.print(f"  url change from {current_url} to {submodule_def.url}")
+
+        current_tracking_branch = search_result.block.get('branch')
+        if current_tracking_branch != submodule_def.tracking_branch:
+            self.output.print(
+                f"  tracking branch change from {current_tracking_branch} to \
+                 {submodule_def.tracking_branch}")
+
+        current_commit = search_result.block.get('commit')
+        if current_commit != submodule_def.current_commit:
+            self.output.print(f"  commit change from {current_commit} to {submodule_def.commit}")
 
     def _print_move_submodule(self, name: str, new_path: str) -> None:
-        self.output.print(f"module {name} MOVED to {new_path}")
+        self.output.info(f"module {name} MOVED to {new_path}")
 
     def _print_add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
-        self.output.print(f"module {submodule_def.path} ADDED at {submodule_def.root_path}")
+        self.output.info(f"module {submodule_def.path} ADDED")
 
     def _print_remove_submodule(self, block: Dict[str, Any]) -> None:
         name = block.get('name')
         path = block.get('path')
-        self.output.print(f"module {path} with name {name} REMOVED")
+        self.output.info(f"module {path} with name {name} REMOVED")
