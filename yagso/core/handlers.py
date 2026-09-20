@@ -85,8 +85,11 @@ class StatusHandler(CommandHandler):
     def execute(self, options: Dict[str, Any]) -> None:
         root_path = Path.cwd()
 
-        self.orchestrator.status_report(root_path)
-        self.output.success("Status computed")
+        result = self.orchestrator.status_report(root_path)
+        if not result:
+            self.output.success("No changes")
+        else:
+            self.output.success("Status completed")
 
 
 class PushHandler(CommandHandler):

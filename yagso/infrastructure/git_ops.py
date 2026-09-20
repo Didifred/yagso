@@ -88,6 +88,18 @@ class GitOperations:
             raise IOError(f"Invalid repository url : {e}") from e
 
     @staticmethod
+    def convert_to_short_sha(reference: str) -> str:
+        """Return a short SHA when ``reference`` is a full SHA.
+
+        Git's conventional abbreviated SHA length is seven characters. Other
+        commit references, including already-short SHAs and branch or tag
+        names, are returned unchanged.
+        """
+        if re.fullmatch(r"[0-9a-fA-F]{40}", reference):
+            return reference[:7]
+        return reference
+
+    @staticmethod
     def _get_remote_head(url: str) -> str:
         """Check that a remote URL is accessible and return its HEAD SHA.
 
