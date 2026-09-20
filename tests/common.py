@@ -89,5 +89,4 @@ class BaseGitTest(unittest.TestCase):
             os.chdir(str(self._orig_cwd))
         except Exception as e:
             raise RuntimeError(
-                f"Failed to restore working directory to {
-                    self._orig_cwd}: {e}") from e
+                f"Failed to restore working directory to {self._orig_cwd}: {e}") from e

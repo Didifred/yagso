@@ -179,6 +179,15 @@ class TestGitOps(BaseGitTest):
 
 class TestUpdateDefaults(unittest.TestCase):
 
+    def test_convert_full_sha_to_short_sha(self):
+        reference = "0123456789abcdef0123456789abcdef01234567"
+        self.assertEqual(GitOperations.convert_to_short_sha(reference), reference[:7])
+
+    def test_convert_non_sha_reference_unchanged(self):
+        for reference in ("main", "0123456", "refs/tags/v1.0"):
+            with self.subTest(reference=reference):
+                self.assertEqual(GitOperations.convert_to_short_sha(reference), reference)
+
     def test_update_defaults_to_no_init(self):
         ops = GitOperations.__new__(GitOperations)
         ops._repo = MagicMock()

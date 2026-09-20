@@ -259,7 +259,7 @@ class SubmoduleOrchestrator:
         with GitOperations(self.repo_path) as git_ops:
             git_ops.push_all()
 
-    def status_report(self, root_path: Optional[Path] = None) -> None:
+    def status_report(self, root_path: Optional[Path] = None) -> bool:
         """Dry-run diff between the manifest (yagso.yaml) and the repository.
 
         For every submodule declared in the manifest the repository state is
@@ -275,6 +275,9 @@ class SubmoduleOrchestrator:
         Raises:
             FileNotFoundError: If the yagso.yaml manifest file does not exist
                 in the specified root path.
+
+        Return :
+            True if at least one difference
         """
         if root_path is None:
             root_path = self.repo_path
@@ -286,8 +289,10 @@ class SubmoduleOrchestrator:
         manifest = self.manifest_manager.load_manifest(manifest_path)
         manifest.validate()
 
-        self.output.info("Repository state vs manifest definition diff")
-        self._diff_manifest(root_path, manifest.submodules)
+        self.output.info("Repository state vs manifest definition status")
+        result = self._diff_manifest(root_path, manifest.submodules)
+
+        return result
 
     def _diff_manifest(
             self,
@@ -303,6 +308,8 @@ class SubmoduleOrchestrator:
 
         childs = []
 
+        result = False
+
         with GitOperations(root_path) as git_ops:
             blocks = git_ops.read_gitmodules_blocks()
 
@@ -311,10 +318,13 @@ class SubmoduleOrchestrator:
 
                 if search_result.status == DiffStatus.MODIFIED:
                     self._print_sync_submodule(submodule, search_result)
+                    result = True
                 elif search_result.status == DiffStatus.MOVED:
                     self._print_move_submodule(search_result.name, submodule.path)
+                    result = True
                 elif search_result.status == DiffStatus.ADDED:
                     self._print_add_submodule(submodule)
+                    result = True
 
                 if submodule.submodules:
                     childs.append(submodule)
@@ -323,40 +333,46 @@ class SubmoduleOrchestrator:
             # Remaining blocks that were not matched are removed submodules
             for block in blocks:
                 self._print_remove_submodule(block)
+                result = True
 
             for submodule in childs:
                 child_root = root_path / Path(submodule.path)
-                self._diff_manifest(child_root, submodule.submodules)
+                result_child = self._diff_manifest(child_root, submodule.submodules)
+                if result_child:
+                    result = True
+
+        return result
 
     def _print_sync_submodule(self, submodule_def: SubmoduleDefinition,
                               search_result: SearchResult) -> None:
-        self.output.info(f"module {submodule_def.path} with name {search_result.name} MODIFIED :")
+        self.output.info(f"submodule {submodule_def.path} MODIFIED :")
 
         current_name = search_result.block.get('name')
         if current_name != submodule_def.name:
             self.output.print(f"  name change from {current_name} to {submodule_def.name}")
 
-        current_url = search_result.block.get('name')
+        current_url = search_result.block.get('url')
         if current_url != submodule_def.url:
             self.output.print(f"  url change from {current_url} to {submodule_def.url}")
 
         current_tracking_branch = search_result.block.get('branch')
         if current_tracking_branch != submodule_def.tracking_branch:
             self.output.print(
-                f"  tracking branch change from {current_tracking_branch} to \
-                 {submodule_def.tracking_branch}")
+                f"  tracking branch change from {current_tracking_branch} to "
+                f"{submodule_def.tracking_branch}")
 
         current_commit = search_result.block.get('commit')
-        if current_commit != submodule_def.current_commit:
-            self.output.print(f"  commit change from {current_commit} to {submodule_def.commit}")
+        if current_commit != submodule_def.commit:
+            out_current_commit = GitOperations.convert_to_short_sha(current_commit)
+            out_sub_commit = GitOperations.convert_to_short_sha(submodule_def.commit)
+            self.output.print(f"  commit change from {out_current_commit} to {out_sub_commit}")
 
     def _print_move_submodule(self, name: str, new_path: str) -> None:
-        self.output.info(f"module {name} MOVED to {new_path}")
+        self.output.info(f"submodule {name} MOVED to {new_path}")
 
     def _print_add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
-        self.output.info(f"module {submodule_def.path} ADDED")
+        self.output.info(f"submodule {submodule_def.path} ADDED")
 
     def _print_remove_submodule(self, block: Dict[str, Any]) -> None:
-        name = block.get('name')
         path = block.get('path')
-        self.output.info(f"module {path} with name {name} REMOVED")
+        self.output.info(f"submodule {path} REMOVED")

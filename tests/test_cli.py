@@ -194,10 +194,12 @@ class TestCli(BaseGitTest):
         self.assertEqual(result, 0)
 
     def test_configure_command(self):
-        """Test that configure command works (identity)"""
+        """Test that configure command works (identity)\n"""
         path_yaml = Path('yagso.yaml')
         original_manifest = path_yaml.read_bytes()
         controller = CLIController(True)
+
+        result = controller.run(['status'])
 
         result = controller.run(['configure'])
 
@@ -219,6 +221,8 @@ class TestCli(BaseGitTest):
 
         try:
             controller = CLIController(True)
+
+            result = controller.run(['status'])
 
             result = controller.run(['configure'])
 
@@ -244,6 +248,8 @@ class TestCli(BaseGitTest):
 
         try:
             controller = CLIController(True)
+
+            result = controller.run(['status'])
 
             result = controller.run(['configure'])
 
@@ -275,6 +281,8 @@ class TestCli(BaseGitTest):
 
         try:
             controller = CLIController(True)
+
+            result = controller.run(['status'])
 
             result = controller.run(['configure'])
 
@@ -334,6 +342,8 @@ class TestCli(BaseGitTest):
         try:
             controller = CLIController(True)
 
+            result = controller.run(['status'])
+
             result = controller.run(['configure'])
 
             # Verify that the submodule tracking branch is configured to main in
@@ -370,6 +380,8 @@ class TestCli(BaseGitTest):
 
         try:
             controller = CLIController(True)
+
+            result = controller.run(['status'])
 
             result = controller.run(['configure'])
 
@@ -440,6 +452,8 @@ class TestCli(BaseGitTest):
 
         try:
             controller = CLIController(True)
+
+            result = controller.run(['status'])
 
             result = controller.run(['configure'])
 
@@ -535,6 +549,8 @@ class TestCli(BaseGitTest):
 
         try:
             controller = CLIController(True)
+
+            result = controller.run(['status'])
 
             result = controller.run(['configure'])
 
