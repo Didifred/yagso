@@ -96,8 +96,12 @@ class PushHandler(CommandHandler):
     """Handler for 'push' command."""
 
     def execute(self, options: Dict[str, Any]) -> None:
-
-        self.orchestrator.push_changes()
+        dry_run = options.get("dry_run", False)
+        summaries = self.orchestrator.push_changes(dry_run)
+        if dry_run:
+            self.output.info("Command will push :")
+            for summary in summaries:
+                self.output.print(summary)
         self.output.success("Pushed all changes to remote")
 
 
@@ -108,5 +112,6 @@ __all__ = [
     "ConfigureHandler",
     "StatusHandler",
     "CommitHandler",
+    "StatusHandler",
     "PushHandler",
 ]

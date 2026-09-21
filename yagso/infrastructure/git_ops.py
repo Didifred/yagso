@@ -968,28 +968,67 @@ class GitOperations:
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to commit changes: {e}") from e
 
-    def push_all(self) -> None:
-        """Push all commits to remote."""
+    def push_all(self, dry_run: bool = False) -> List[str]:
+        """Push the root and YAGSO-created submodule commits."""
+        summaries = []
         try:
             # Push main repository
             origin = self.repo.remote('origin')
-            origin.push()
+            results = origin.push(dry_run=dry_run)
 
-            # Push all submodules
-            for submodule in self.repo.submodules:
-                if submodule.module_exists():
-                    submodule_repo = submodule.module()
-                    try:
-                        submodule_origin = submodule_repo.remote('origin')
-                        submodule_origin.push()
-                    except (git.GitCommandError, ValueError):
-                        # Skip if submodule has no remote or push fails
-                        pass
+            for info in results:
+                if info.flags & info.ERROR:
+                    raise RuntimeError(f"Push failed: {info.summary}")
+                summaries.append(
+                    f"{Path(self.repo_path).name}: {info.summary.rstrip('\r\n')}")
+
+            summaries.extend(self._push_yagso_submodules(self.repo, dry_run))
 
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to push changes: {e}") from e
         except ValueError as e:
             raise RuntimeError(f"No remote origin configured: {e}") from e
+
+        return summaries
+
+    def _push_yagso_submodules(self, repo: git.Repo, dry_run: bool) -> List[str]:
+        """Recursively push only submodules whose HEAD was committed by YAGSO."""
+        summaries = []
+        for submodule in repo.submodules:
+            if not submodule.module_exists():
+                continue
+
+            submodule_repo = submodule.module()
+            if self._is_yagso_commit(submodule_repo):
+                try:
+                    submodule_origin = submodule_repo.remote('origin')
+                    results = submodule_origin.push(dry_run=dry_run)
+                    for info in results:
+                        if info.flags & info.ERROR:
+                            raise RuntimeError(f"Push failed: {info.summary}")
+                        summaries.append(
+                            f"{Path(submodule.path).name}: "
+                            f"{info.summary.rstrip('\r\n')}")
+
+                except git.GitCommandError as e:
+                    raise RuntimeError(f"Failed to push changes: {e}") from e
+                except ValueError as e:
+                    raise RuntimeError(f"No remote origin configured: {e}") from e
+
+            summaries.extend(self._push_yagso_submodules(submodule_repo, dry_run))
+
+        return summaries
+
+    @staticmethod
+    def _is_yagso_commit(repo: git.Repo) -> bool:
+        """Return whether the repository HEAD commit was created by YAGSO."""
+        is_yagso_commit = False
+        try:
+            is_yagso_commit = repo.head.commit.message.startswith("bump change in ")
+        except (ValueError, git.GitCommandError):
+            pass
+
+        return is_yagso_commit
 
     def get_status(self) -> Dict[str, Any]:
         """Get repository status."""

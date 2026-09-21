@@ -73,6 +73,10 @@ export PATH="$PATH:/home/$(USER)/.local/bin"
    pip install -e .
    ```
 
+For development and troubleshooting, every command accepts the hidden `--debug`
+option. It enables exception tracebacks in the CLI output, for example:
+`yagso status --debug`.
+
 
 ## Commands
 
@@ -95,8 +99,8 @@ These latest commands are simple git cli wrapper on a repo and its submodules (-
 
 - **`yagso update --init --remote`**: Updates submodules to the latest commit on their tracking branch.
 
-- **`yagso push`**: Pushes all commits of the submodules to the remote repository. 
-NOT IMPLEMENTED YET (since not tested)
+- **`yagso push`**: Pushes the root repository and submodules whose latest commit was created by YAGSO to the remote repository.
+- **`yagso push --dry-run`**: Reports what would be pushed without pushing changes.
 
 ## Miscs
 

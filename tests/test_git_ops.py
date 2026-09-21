@@ -1,4 +1,4 @@
-"""Test git_ops """
+"""Test git_ops.py """
 import unittest
 import tempfile
 from pathlib import Path
@@ -10,8 +10,44 @@ from yagso.infrastructure.git_ops import GitOperations
 from yagso.domain.submodule import SubmoduleDefinition
 from tests.common import BaseGitTest
 
+# pylint: disable=all
+
 
 class TestGitOps(BaseGitTest):
+
+    def test_push_all_passes_dry_run_to_git(self):
+        git_ops = GitOperations.__new__(GitOperations)
+        git_ops._repo = MagicMock()
+        origin = git_ops._repo.remote.return_value
+        git_ops._repo.submodules = []
+
+        git_ops.push_all(dry_run=True)
+
+        origin.push.assert_called_once_with(dry_run=True)
+
+    def test_push_all_pushes_only_yagso_submodule_commits(self):
+        git_ops = GitOperations.__new__(GitOperations)
+        git_ops._repo = MagicMock()
+        git_ops._repo.submodules = []
+
+        yagso_submodule = MagicMock()
+        yagso_submodule.module_exists.return_value = True
+        yagso_repo = yagso_submodule.module.return_value
+        yagso_repo.head.commit.message = "bump change in lib1 : update"
+        yagso_repo.submodules = []
+
+        user_submodule = MagicMock()
+        user_submodule.module_exists.return_value = True
+        user_repo = user_submodule.module.return_value
+        user_repo.head.commit.message = "user commit"
+        user_repo.submodules = []
+
+        git_ops._repo.submodules = [yagso_submodule, user_submodule]
+
+        git_ops.push_all()
+
+        yagso_repo.remote.return_value.push.assert_called_once_with(dry_run=False)
+        user_repo.remote.assert_not_called()
 
     @unittest.skip("Utility method test, not a real test case")
     def test_rebuild_submodule_metadata(self):

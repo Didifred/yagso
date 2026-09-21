@@ -1,3 +1,4 @@
+"""Test orchestrator.py"""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -5,6 +6,8 @@ from unittest.mock import patch
 from yagso.core.orchestrator import SubmoduleOrchestrator, DiffStatus
 from yagso.domain.submodule import SubmoduleDefinition
 from tests.common import BaseGitTest
+
+# pylint: disable=all
 
 
 def _sub(name="lib1", path="lib1", url="https://github.com/a/b.git",
@@ -109,6 +112,13 @@ class TestPushChanges(unittest.TestCase):
             mock_ops = mock_cls.return_value.__enter__.return_value
             orch.push_changes()
         mock_ops.push_all.assert_called_once_with()
+
+    def test_push_changes_delegates_dry_run_to_push_all(self):
+        orch = SubmoduleOrchestrator(Path("."))
+        with patch("yagso.core.orchestrator.GitOperations") as mock_cls:
+            mock_ops = mock_cls.return_value.__enter__.return_value
+            orch.push_changes(dry_run=True)
+        mock_ops.push_all.assert_called_once_with(dry_run=True)
 
 
 class TestOrchestratorUrlProtocolChange(BaseGitTest):

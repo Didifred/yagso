@@ -28,13 +28,6 @@ class SearchResult:
     block: Optional[Dict[str, Any]] = None
 
 
-@dataclass
-class PropertyChange:
-    """Represents a change in a submodule property."""
-    repo_state: str
-    manifest: str
-
-
 class SubmoduleOrchestrator:
     """High-level coordination of submodule operations."""
 
@@ -254,10 +247,10 @@ class SubmoduleOrchestrator:
         # No path match, no url+commit+name match — treat as added.
         return SearchResult(DiffStatus.ADDED, submodule.name or "")
 
-    def push_changes(self) -> None:
-        """Push all commits to remote."""
+    def push_changes(self, dry_run: bool = False) -> List[str]:
+        """Push all commits to remote, optionally without changing remotes."""
         with GitOperations(self.repo_path) as git_ops:
-            git_ops.push_all()
+            return git_ops.push_all(dry_run)
 
     def status_report(self, root_path: Optional[Path] = None) -> bool:
         """Dry-run diff between the manifest (yagso.yaml) and the repository.
