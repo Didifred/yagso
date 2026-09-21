@@ -3,7 +3,8 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "yagso"version = "0.1.7"
+name = "yagso"
+version = "0.1.8"
 description = "CLI tool that manages Git submodule hierarchies via a YAML manifest"
 authors = [{name = "Freddy Boutin", email = "didifred.web@gmail.com"}]
 requires-python = ">=3.8"
