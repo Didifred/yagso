@@ -1,8 +1,11 @@
+"""Test manager.py"""
 import unittest
 
 from yagso.domain.bom import Bom
 from yagso.domain.manifest import Manifest
 from yagso.infrastructure.manifest_manager import ManifestManager
+
+# pylint: disable=all
 
 
 class TestGetSubmoduleFieldMerged(unittest.TestCase):

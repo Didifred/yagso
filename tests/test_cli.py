@@ -1,4 +1,4 @@
-"""Integration test of yagso cli commands """
+"""Integration test of yagso cli commands (controller.py) """
 import unittest
 import copy
 from io import StringIO
@@ -15,6 +15,8 @@ from yagso.cli.controller import CLIController
 from yagso.infrastructure.manifest_manager import ManifestManager
 from yagso.domain.submodule import SubmoduleDefinition
 from tests.common import BaseGitTest
+
+# pylint: disable=all
 
 
 class TestFormatter(unittest.TestCase):
@@ -528,6 +530,8 @@ class TestCli(BaseGitTest):
             self.assertIn('Test commit from CLI', root_repo.head.commit.message)
             self.assertFalse(root_repo.is_dirty())
             self.assertEqual(result, 0)
+
+            result = controller.run(['push', '--dry-run'])
         finally:
             manager.save_manifest(manifest, path_yaml)
 
@@ -598,7 +602,7 @@ class TestCli(BaseGitTest):
 
     def test_generate_command__bom(self):
         """Test that generate --BOM command works"""
-        controller = CLIController()
+        controller = CLIController(True)
 
         result = controller.run(['generate', '--BOM'])
 
@@ -629,7 +633,7 @@ class TestCli(BaseGitTest):
 
     def test_generate_command__bom_files_filter(self):
         """Test that generate --BOM --files filters BOM files by regex"""
-        controller = CLIController()
+        controller = CLIController(True)
 
         result = controller.run(['generate', '--BOM', '--files', r'.*\.c$'])
         self.assertEqual(result, 0)

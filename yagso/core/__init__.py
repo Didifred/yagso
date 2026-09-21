@@ -9,6 +9,7 @@ from .handlers import (
     UpdateHandler,
     ConfigureHandler,
     CommitHandler,
+    StatusHandler,
     PushHandler,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "UpdateHandler",
     "ConfigureHandler",
     "CommitHandler",
+    "StatusHandler",
     "PushHandler",
 ]

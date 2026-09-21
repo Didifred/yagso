@@ -26,6 +26,14 @@ class CLIController:
         self.debug = debug  # Set to True to enable debug output
         self.output = get_output_formatter()
 
+    def set_debug(self, debug: bool):
+        """Set debug mode
+
+        Arguments:
+            debug (bool): activate traceback of exceptions
+        """
+        self.debug = debug
+
     def run(self, args: list) -> int:
         """Parse arguments and dispatch to appropriate command."""
 
@@ -35,6 +43,7 @@ class CLIController:
             if not options.get("command"):
                 return self.SUCCESS  # Help was shown or no command specified
 
+            self.set_debug(options.get("debug", False))
             self.parser.validate(options)
 
             # Determine repository path

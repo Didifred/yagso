@@ -55,12 +55,13 @@ The agent follows a strict incremental development cycle:
 - Look first on existing design patterns in `yagso/` project source files in order to implement features
 
 ### Testing Strategy
+- Important : Execute any test under the project venv 
 - Write unit tests for all new functionality
 - In unit tests, mock network, database, filesystem and third-party API calls
 - Ensure test coverage for happy path and error scenarios
 - Follow test naming conventions: `test_<method_name>_<scenario>`
 - Look first on existing design patterns in `tests/` project source files in order to implement unit tests
-- Activate venv and install dependencies from pyproject.toml in order to runn tests
+
 
 ### Documentation Management
 - Update ARCHITECTURE.md when implementation introduces architectural changes

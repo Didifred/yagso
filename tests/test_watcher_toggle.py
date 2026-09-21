@@ -1,11 +1,14 @@
+"""VS code watcher toggle to avoid git conflicts """
+
 import json
 import unittest
-from pathlib import Path
-
 from scripts.watcher_toggle import WatcherToggle
+
+# pylint: disable=all
 
 
 class TestWatcherToggle(unittest.TestCase):
+
     def test_add_and_remove_watcher_excludes(self):
 
         toggle = WatcherToggle()
