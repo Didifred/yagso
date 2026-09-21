@@ -102,8 +102,3 @@ These latest commands are simple git cli wrapper on a repo and its submodules (-
 - **`yagso push`**: Pushes the root repository and submodules whose latest commit was created by YAGSO to the remote repository.
 - **`yagso push --dry-run`**: Reports what would be pushed without pushing changes.
 
-## Miscs
-
-Line count :
-
-**`pygount --format=summary .\yagso\`**
