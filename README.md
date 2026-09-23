@@ -41,14 +41,14 @@ To build the Python package, ensure you have Python 3.8+ installed and follow th
    ```
 
 This will create distribution files in the `dist/` directory:
-- `yagso-0.1.6.tar.gz` (source distribution)
-- `yagso-0.1.6-py3-none-any.whl` (wheel)
+- `yagso-x.y.z.tar.gz` (source distribution)
+- `yagso-x.y.z-py3-none-any.whl` (wheel)
 
 ## Installation
 
 Install the package using pip:
 ```bash
-pip install --force-reinstall yagso-0.1.6-py3-none-any.whl
+pip install --force-reinstall yagso-0.1.9-py3-none-any.whl
 ```
 
 - On linux, like pip warns, you may need to add to path the local bin path, for example : 
