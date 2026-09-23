@@ -979,8 +979,9 @@ class GitOperations:
             for info in results:
                 if info.flags & info.ERROR:
                     raise RuntimeError(f"Push failed: {info.summary}")
-                summaries.append(
-                    f"{Path(self.repo_path).name}: {info.summary.rstrip('\r\n')}")
+                summary = info.summary.rstrip("\r\n")
+                msg = f"{Path(self.repo_path).name}: {summary}"
+                summaries.append(msg)
 
             summaries.extend(self._push_yagso_submodules(self.repo, dry_run))
 
@@ -1006,9 +1007,9 @@ class GitOperations:
                     for info in results:
                         if info.flags & info.ERROR:
                             raise RuntimeError(f"Push failed: {info.summary}")
-                        summaries.append(
-                            f"{Path(submodule.path).name}: "
-                            f"{info.summary.rstrip('\r\n')}")
+                        summary = info.summary.rstrip("\r\n")
+                        msg = f"{Path(submodule.path).name}: {summary}"
+                        summaries.append(msg)
 
                 except git.GitCommandError as e:
                     raise RuntimeError(f"Failed to push changes: {e}") from e
