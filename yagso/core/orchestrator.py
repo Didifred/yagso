@@ -338,7 +338,7 @@ class SubmoduleOrchestrator:
 
     def _print_sync_submodule(self, submodule_def: SubmoduleDefinition,
                               search_result: SearchResult) -> None:
-        self.output.info(f"submodule {submodule_def.path} MODIFIED :")
+        self.output.print(f"submodule {submodule_def.path} MODIFIED :")
 
         current_name = search_result.block.get('name')
         if current_name != submodule_def.name:
@@ -361,11 +361,11 @@ class SubmoduleOrchestrator:
             self.output.print(f"  commit change from {out_current_commit} to {out_sub_commit}")
 
     def _print_move_submodule(self, name: str, new_path: str) -> None:
-        self.output.info(f"submodule {name} MOVED to {new_path}")
+        self.output.print(f"submodule {name} MOVED to {new_path}")
 
     def _print_add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
-        self.output.info(f"submodule {submodule_def.path} ADDED")
+        self.output.print(f"submodule {submodule_def.path} ADDED")
 
     def _print_remove_submodule(self, block: Dict[str, Any]) -> None:
         path = block.get('path')
-        self.output.info(f"submodule {path} REMOVED")
+        self.output.print(f"submodule {path} REMOVED")

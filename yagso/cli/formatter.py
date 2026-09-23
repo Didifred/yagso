@@ -1,5 +1,6 @@
 """CLI output formatting with Rich."""
 
+import sys
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn
 
@@ -24,13 +25,21 @@ class OutputFormatter:
         self._task_id = None
         self._bar_column = None
 
+    def _supports_unicode(self) -> bool:
+        try:
+            encoding = sys.stdout.encoding or ""
+            return encoding.lower().replace("-", "") in ("utf8", "utf-8")
+        except AttributeError:
+            return False
+
     def print(self, message: str) -> None:
         """Simple print."""
         self._console.print(message)
 
     def success(self, message: str) -> None:
         """Display a success message."""
-        self._console.print(f"[green]✓[/green] {message}")
+        check = "✓" if self._supports_unicode() else "OK"
+        self._console.print(f"[green]{check}[/green]  {message}")
 
     def error(self, message: str) -> None:
         """Display an error message."""
@@ -42,11 +51,13 @@ class OutputFormatter:
             self._progress = None
             self._task_id = None
             self._bar_column = None
-        self._console.print(f"[red]✗ Error:[/red] {message}")
+        cross = "✗" if self._supports_unicode() else "X"
+        self._console.print(f"[red]{cross} Error:[/red]  {message}")
 
     def info(self, message: str) -> None:
         """Display an informational message."""
-        self._console.print(f"[blue]ℹ[/blue] {message}")
+        info = "ℹ" if self._supports_unicode() else "i"
+        self._console.print(f"[blue]{info}[/blue]  {message}")
 
     def progress(self, current: int, total: int, message: str) -> None:
         """Display a Rich-based progress bar."""
