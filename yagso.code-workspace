@@ -17,14 +17,14 @@
         ],
         "python.testing.autoTestDiscoverOnSaveEnabled": true,
         "chat.newSession.defaultMode": "yagso",
-        "git-graph.maxDepthOfRepoSearch": 10,
+        "git-graph-libre.maxDepthOfRepoSearch": 10,
         "autoDocstring.docstringFormat": "pep257"
     },
     "extensions": {
         "recommendations": [
             "njpwerner.autodocstring",
             "ms-python.autopep8",
-            "mhutchie.git-graph",
+            "plohnensoftware.git-graph-libre",
             "ms-python.vscode-pylance",
             "ms-python.pylint",
             "ms-python.python",

@@ -969,9 +969,11 @@ class GitOperations:
         """Push the root and YAGSO-created submodule commits."""
         summaries = []
         try:
-            # Push main repository
-            origin = self.repo.remote('origin')
-            results = origin.push(dry_run=dry_run)
+            # Push top repository
+            if not self.repo.remotes:
+                raise ValueError("No remote configured")
+            remote = self.repo.remotes[0]
+            results = remote.push(dry_run=dry_run)
 
             for info in results:
                 if info.flags & info.ERROR:
@@ -999,8 +1001,12 @@ class GitOperations:
             submodule_repo = submodule.module()
             if self._is_yagso_commit(submodule_repo):
                 try:
-                    submodule_origin = submodule_repo.remote('origin')
-                    results = submodule_origin.push(dry_run=dry_run)
+                    if not submodule_repo.remotes:
+                        raise ValueError("No remote configured")
+                    submodule_remote = submodule_repo.remotes[0]
+                    branch_name = submodule_repo.active_branch.name
+                    refspec = f"HEAD:refs/heads/{branch_name}"
+                    results = submodule_remote.push(refspec, dry_run=dry_run)
                     for info in results:
                         if info.flags & info.ERROR:
                             raise RuntimeError(f"Push failed: {info.summary}")
@@ -1077,7 +1083,8 @@ class GitOperations:
 
         When HEAD is detached this method searches for an existing local
         or remote-tracking branch that points at the current commit. If
-        one is found it is checked out. Otherwise create and checkout the default branch.
+        one is found it is checked out. Otherwise create and checkout a branch
+        ``yagso/<tag>`` if a tag exists, else fallback to ``yagso/<short sha>``.
 
         Args:
             repo: The git.Repo object to operate on.
@@ -1133,8 +1140,23 @@ class GitOperations:
                 else:
                     repo.git.checkout(branch_name)
             else:
-                branch_name = default_branch
-                repo.git.checkout('-B', branch_name, current_commit.hexsha)
+                # Create branch with tag name or short sha
+                matching_tag = next((tag for tag in repo.tags if tag.commit == current_commit),
+                                    None)
+
+                if matching_tag is not None:
+                    branch_name = f"yagso/{matching_tag.name}"
+                else:
+                    branch_name = f"yagso/{current_commit.hexsha[:7]}"
+
+                branch = repo.create_head(branch_name, current_commit.hexsha, force=True)
+                if repo.remotes:
+                    remote_name = repo.remotes[0].name
+                    remote_ref = git.RemoteReference(
+                        repo, f"refs/remotes/{remote_name}/{branch_name}")
+                    branch.set_tracking_branch(remote_ref)
+                branch.checkout()
+
         except Exception as e:
             raise RuntimeError(f"Failed to checkout branch {branch_name} : {e}") from e
 

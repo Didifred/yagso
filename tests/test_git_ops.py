@@ -35,6 +35,9 @@ class TestGitOps(BaseGitTest):
         yagso_repo = yagso_submodule.module.return_value
         yagso_repo.head.commit.message = "bump change in lib1 : update"
         yagso_repo.submodules = []
+        yagso_repo.active_branch.name = "yagso/test"
+        yagso_remote = MagicMock()
+        yagso_repo.remotes = [yagso_remote]
 
         user_submodule = MagicMock()
         user_submodule.module_exists.return_value = True
@@ -46,7 +49,8 @@ class TestGitOps(BaseGitTest):
 
         git_ops.push_all()
 
-        yagso_repo.remote.return_value.push.assert_called_once_with(dry_run=False)
+        yagso_remote.push.assert_called_once_with(
+            "HEAD:refs/heads/yagso/test", dry_run=False)
         user_repo.remote.assert_not_called()
 
     @unittest.skip("Utility method test, not a real test case")
@@ -203,9 +207,56 @@ class TestGitOps(BaseGitTest):
                 with GitOperations(repo_path) as ops:
                     ops._checkout_ref_or_commit(repo, 'default')
 
-                # After the helper, we should be on branch yagso-<commit_hash> for the second commit
                 self.assertFalse(repo.head.is_detached)
-                branch_name = f"default"
+                branch_name = f"yagso/{commit.hexsha[:7]}"
+                self.assertIn(branch_name, [b.name for b in repo.branches])
+                self.assertEqual(repo.head.commit.hexsha, commit.hexsha)
+
+            finally:
+                repo.close()
+
+    def test_checkout_ref_or_commit_tag_branch(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            repo_path = Path(tmp_dir) / 'repo'
+            repo = git.Repo.init(repo_path)
+
+            try:
+                repo.config_writer().set_value('user', 'name', 'Test User').release()
+                repo.config_writer().set_value('user', 'email', 'test@example.com').release()
+
+                (repo_path / 'README.md').write_text('hello\n', encoding='utf-8')
+                repo.index.add(['README.md'])
+                commit = repo.index.commit('initial commit')
+
+                # Detach HEAD by checking out the commit directly
+                repo.git.checkout(commit.hexsha)
+                self.assertTrue(repo.head.is_detached)
+
+                # Call the helper
+                with GitOperations(repo_path) as ops:
+                    ops._checkout_ref_or_commit(repo, 'default')
+
+                tag_name = 'release/1.0'
+                repo.create_tag(tag_name, ref=commit)
+
+                # After the helper, we should be on the repository's default branch.
+                self.assertFalse(repo.head.is_detached)
+                self.assertIn(repo.active_branch.name, ('main', 'master'))
+                self.assertEqual(repo.head.commit.hexsha, commit.hexsha)
+
+                (repo_path / 'README.md').write_text('hello again\n', encoding='utf-8')
+                repo.index.add(['README.md'])
+                commit2 = repo.index.commit('second commit')
+                # checkout initial commit to detach HEAD
+                repo.git.checkout(commit.hexsha)
+                self.assertTrue(repo.head.is_detached)
+
+                # Call the helper
+                with GitOperations(repo_path) as ops:
+                    ops._checkout_ref_or_commit(repo, 'default')
+
+                self.assertFalse(repo.head.is_detached)
+                branch_name = f"yagso/{tag_name}"
                 self.assertIn(branch_name, [b.name for b in repo.branches])
                 self.assertEqual(repo.head.commit.hexsha, commit.hexsha)
 
