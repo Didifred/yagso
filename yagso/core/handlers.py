@@ -101,7 +101,8 @@ class PushHandler(CommandHandler):
             self.output.info("Command will push :")
             for summary in summaries:
                 self.output.print(summary)
-        self.output.success("Pushed all changes to remote")
+        if not dry_run:
+            self.output.success("Pushed all changes to remote")
 
 
 __all__ = [

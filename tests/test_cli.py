@@ -590,6 +590,62 @@ class TestCli(BaseGitTest):
         finally:
             manager.save_manifest(manifest, path_yaml)
 
+    def test_configure_command_repopulate_subs_on_tag(self):
+        """Test that configure command works with repopulating submodules after a
+        submodule has been removed from the repo and added back to the manifest"""
+        # Modify yagso.yaml to add a new submodule addedsub
+        path_yaml = Path('yagso.yaml')
+        manager = ManifestManager()
+        manifest = manager.load_manifest(path_yaml)
+        new_manifest = copy.deepcopy(manifest)
+
+        manager.update_submodule_field(new_manifest,
+                                       'lib2', 'commit',
+                                       'LIB2_v1.0')
+
+        # Write modified manifest back
+        manager.save_manifest(new_manifest, path_yaml)
+
+        try:
+            controller = CLIController(True)
+
+            # Checkout main in root repo to ensure commit is made on main branch
+            root_repo = Repo(Path.cwd())
+            root_repo.git.checkout('main')
+
+            result = controller.run(['status'])
+
+            result = controller.run(['configure'])
+
+            # Verify that lib2 uses the requested commit and that its lib3
+            # submodule has been repopulated.
+            lib2_repo = Repo('lib2')
+            self.assertEqual(
+                lib2_repo.head.commit.hexsha,
+                lib2_repo.commit('LIB2_v1.0').hexsha)
+
+            lib3_submodule_path = Path('lib2/lib3')
+            self.assertTrue(lib3_submodule_path.exists())
+            self.assertTrue((lib3_submodule_path / '.git').exists())
+            self.assertTrue(any(submodule.path == 'lib3' for submodule in lib2_repo.submodules))
+
+            result = controller.run(['commit', '--message', 'Test branch creation'])
+            self.assertEqual(result, 0)
+
+            result = controller.run(['push', '--dry-run'])
+            self.assertEqual(result, 0)
+
+            configured_manifest = manager.load_manifest(path_yaml)
+            self.assertIsNotNone(
+                manager.get_submodule_field(
+                    configured_manifest,
+                    'lib2/lib3',
+                    'url'))
+            self.assertEqual(result, 0)
+
+        finally:
+            manager.save_manifest(manifest, path_yaml)
+
     def test_commit_command_none(self):
         """Test that commit command without changes returns information and does not fail"""
 
