@@ -928,14 +928,11 @@ class GitOperations:
         """Update all submodules."""
 
         try:
-            if options.get("init", False) and options.get("remote", False):
+            if options.get("remote", True):
                 # Initialize and update submodule
                 self.repo.git.submodule("update", "--init", "--remote", "--recursive")
-            elif options.get("init", False):
-                self.repo.git.submodule("update", "--init", "--recursive")
             else:
-                # Just update existing submodules
-                self.repo.git.submodule("update", "--recursive")
+                self.repo.git.submodule("update", "--init", "--recursive")
 
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to update submodules : {e}") from e

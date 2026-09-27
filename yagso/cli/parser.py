@@ -52,14 +52,9 @@ class ArgumentParser:
         # update command
         update_parser = subparsers.add_parser(
             "update",
-            help="Update submodules without initializing new ones"
+            help="Update and initialize submodules"
         )
         self._add_debug_option(update_parser)
-        update_parser.add_argument(
-            "--init",
-            action="store_true",
-            help="Initialize and clone submodules if they don't exist"
-        )
         update_parser.add_argument(
             "--remote",
             action="store_true",
@@ -126,7 +121,6 @@ class ArgumentParser:
 
         # Add command-specific options
         if parsed.command == "update":
-            options["init"] = getattr(parsed, "init", False)
             options["remote"] = getattr(parsed, "remote", False)
         elif parsed.command == "generate":
             options["BOM"] = getattr(parsed, "BOM", False)
