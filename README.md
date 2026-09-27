@@ -86,19 +86,18 @@ option. It enables exception tracebacks in the CLI output, for example:
 
 - **`yagso configure`**: Applies the manifest configuration to the repository.
 
-- **`yagso status`**: Read-only dry run — reports, for every submodule in the manifest, whether it is unchanged, modified, moved, added or would be removed compared to the current repository state, plus any orphaned `.gitmodules` blocks. Nothing is written; it is a preview of what `configure` would do.
+- **`yagso status`**: Read-only dry run — reports, for every submodule in the manifest, whether it is modified, moved, added or would be removed compared to the current repository state. Nothing is written; it is a preview of what `configure` would do.
 
 - **`yagso commit --message <msg>`**: Commits changes recursively, including `.gitmodules`, index changes, and the manifest file itself.
 
 
 These latest commands are simple git cli wrapper on a repo and its submodules (--recursive) :
 
-- **`yagso update`**: Updates the submodules without initializing new ones.
+- **`yagso update`**: Updates the submodules and initialize them if needs.
 
-- **`yagso update --init`**: After initial cloning of the root repository, clones all submodules recursively.
-
-- **`yagso update --init --remote`**: Updates submodules to the latest commit on their tracking branch.
+- **`yagso update --remote`**: Updates submodules to the latest commit on their tracking branch.
 
 - **`yagso push`**: Pushes the root repository and submodules whose latest commit was created by YAGSO to the remote repository.
+
 - **`yagso push --dry-run`**: Reports what would be pushed without pushing changes.
 

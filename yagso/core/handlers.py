@@ -46,9 +46,8 @@ class UpdateHandler(CommandHandler):
 
         self.orchestrator.update_submodules(options, root_path)
 
-        init_msg = " and initialized" if options.get("init", False) else ""
         remote_msg = " from remote" if options.get("remote", False) else ""
-        self.output.success(f"Updated submodules{init_msg}{remote_msg}")
+        self.output.success(f"Updated and initialized submodules{remote_msg}")
 
 
 class ConfigureHandler(CommandHandler):

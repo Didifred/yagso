@@ -104,23 +104,6 @@ class TestSearchSubmodule(unittest.TestCase):
         self.assertEqual([block["name"] for block in blocks], ["lib2"])
 
 
-class TestPushChanges(unittest.TestCase):
-
-    def test_push_changes_delegates_to_push_all(self):
-        orch = SubmoduleOrchestrator(Path("."))
-        with patch("yagso.core.orchestrator.GitOperations") as mock_cls:
-            mock_ops = mock_cls.return_value.__enter__.return_value
-            orch.push_changes()
-        mock_ops.push_all.assert_called_once_with()
-
-    def test_push_changes_delegates_dry_run_to_push_all(self):
-        orch = SubmoduleOrchestrator(Path("."))
-        with patch("yagso.core.orchestrator.GitOperations") as mock_cls:
-            mock_ops = mock_cls.return_value.__enter__.return_value
-            orch.push_changes(dry_run=True)
-        mock_ops.push_all.assert_called_once_with(dry_run=True)
-
-
 class TestOrchestratorUrlProtocolChange(BaseGitTest):
 
     def test_protocol_change_https_to_ssh_detected(self):

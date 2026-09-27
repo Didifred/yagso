@@ -224,18 +224,15 @@ class TestUpdateDefaults(unittest.TestCase):
             with self.subTest(reference=reference):
                 self.assertEqual(GitOperations.convert_to_short_sha(reference), reference)
 
-    def test_update_defaults_to_no_init(self):
+    def test_update_always_initializes_submodules(self):
         ops = GitOperations.__new__(GitOperations)
         ops._repo = MagicMock()
         repo = ops._repo
 
-        ops.update_all_submodules({})
-        repo.git.submodule.assert_called_once_with("update", "--recursive")
+        ops.update_all_submodules({"remote": False})
+        repo.git.submodule.assert_called_once_with("update", "--init", "--recursive")
 
-        ops.update_all_submodules({"init": True})
-        repo.git.submodule.assert_called_with("update", "--init", "--recursive")
-
-        ops.update_all_submodules({"init": True, "remote": True})
+        ops.update_all_submodules({"remote": True})
         repo.git.submodule.assert_called_with(
             "update", "--init", "--remote", "--recursive")
 

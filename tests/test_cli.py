@@ -8,6 +8,7 @@ from git import Repo
 from rich.console import Console
 
 from yagso.cli.formatter import OutputFormatter, get_output_formatter
+from yagso.cli.parser import ArgumentParser
 from yagso.core.handlers import GenerateHandler
 from yagso.core.orchestrator import SubmoduleOrchestrator
 from yagso.infrastructure.git_ops import GitOperations
@@ -114,6 +115,16 @@ class TestCli(BaseGitTest):
         controller = CLIController(True)
         result = controller.run(['invalid'])
         self.assertEqual(result, 1)
+
+    def test_update_options_do_not_include_init(self):
+        """Update initializes submodules without exposing an init option."""
+        parser = ArgumentParser()
+
+        options = parser.parse(["update"])
+
+        self.assertNotIn("init", options)
+        with self.assertRaises(ValueError):
+            parser.parse(["update", "--init"])
 
     def test_generate_command(self):
         """Test that generate command works"""
