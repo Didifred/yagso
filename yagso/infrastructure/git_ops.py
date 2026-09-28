@@ -169,6 +169,41 @@ class GitOperations:
                 return ref[len(prefix):]
         return ref
 
+    @staticmethod
+    def get_remote_name(repo: git.Repo) -> Optional[str]:
+        """Return the current branch's upstream remote name, or ``origin`` as fallback."""
+        remote_name = None
+        try:
+            upstream = repo.active_branch.tracking_branch()
+            if upstream is not None:
+                remote_name = upstream.remote_name
+        except (TypeError, ValueError):
+            # A detached HEAD has no active branch or upstream.
+            pass
+
+        if remote_name is None and any(remote.name == 'origin' for remote in repo.remotes):
+            remote_name = 'origin'
+
+        return remote_name
+
+    @staticmethod
+    def get_remote(repo: git.Repo) -> Optional[git.RemoteReference]:
+        """Return the current branch's upstream remote, or ``origin`` as fallback."""
+        upstream = None
+        try:
+            upstream = repo.active_branch.tracking_branch()
+        except (TypeError, ValueError):
+            # A detached HEAD has no active branch or upstream.
+            pass
+
+        if upstream is None:
+            for remote in repo.remotes:
+                if remote.name == 'origin':
+                    upstream = remote
+                    break
+
+        return upstream
+
     def __init__(self, repo_path: Path):
         """Initialize with repository path."""
         self.repo_path = repo_path
@@ -559,17 +594,22 @@ class GitOperations:
 
                 try:
                     resolved_sha = sub_repo.git.rev_parse(desired_ref)
-                except Exception:
-                    # TODO - search on any remote not only origin
-                    # Try on origin if local resolution fails
-                    origin_ref = f'origin/{desired_ref}'
-                    try:
-                        resolved_sha = sub_repo.git.rev_parse(origin_ref)
-                        resolved_from_origin = True
-                    except Exception as e:
+                except Exception as e:
+                    # Look for remote ref
+                    remote_name = self.get_remote_name(sub_repo)
+
+                    if remote_name is not None:
+                        origin_ref = f'{remote_name}/{desired_ref}'
+                        try:
+                            resolved_sha = sub_repo.git.rev_parse(origin_ref)
+                            resolved_from_origin = True
+                        except Exception as e2:
+                            raise RuntimeError(
+                                f"Failed to resolve sha of {desired_ref} in submodule "
+                                f"{submodule_def.name}") from e2
+                    else:
                         raise RuntimeError(
-                            f"Failed to resolve sha of {desired_ref} in submodule "
-                            f"{submodule_def.name}") from e
+                            f"{desired_ref} doesn't exist in submodule {submodule_def.name}") from e
 
                 if not GitOperations._sha_equal(current_commit, resolved_sha):
                     try:
@@ -969,10 +1009,11 @@ class GitOperations:
         """Push the root and YAGSO-created submodule commits."""
         summaries = []
         try:
+            remote = self.get_remote(self.repo)
+
             # Push top repository
-            if not self.repo.remotes:
+            if remote is None:
                 raise ValueError("No remote configured")
-            remote = self.repo.remotes[0]
             results = remote.push(dry_run=dry_run)
 
             for info in results:
@@ -1003,7 +1044,7 @@ class GitOperations:
                 try:
                     if not submodule_repo.remotes:
                         raise ValueError("No remote configured")
-                    submodule_remote = submodule_repo.remotes[0]
+                    submodule_remote = self.get_remote(submodule_repo)
                     branch_name = submodule_repo.active_branch.name
                     refspec = f"HEAD:refs/heads/{branch_name}"
                     results = submodule_remote.push(refspec, dry_run=dry_run)
@@ -1078,7 +1119,7 @@ class GitOperations:
 
         return branch
 
-    def _checkout_ref_or_commit(self, repo: git.Repo, default_branch: str) -> str:
+    def _checkout_ref_or_commit(self, repo: git.Repo, preferred_branch: str) -> str:
         """Attach HEAD to a branch if one points to the current commit.
 
         When HEAD is detached this method searches for an existing local
@@ -1088,7 +1129,7 @@ class GitOperations:
 
         Args:
             repo: The git.Repo object to operate on.
-            default_branch: The name of the default branch to create if no matching branch is found.
+            preferred_branch: The preferred branch name to checkout (if exists).
 
         Raises:
             RuntimeError: If the checkout operation fails.
@@ -1111,7 +1152,7 @@ class GitOperations:
                 matching_branch = b
 
                 # prefer the default branch if it matches
-                if b.name == default_branch:
+                if b.name == preferred_branch:
                     break
 
         if matching_branch is None:
@@ -1123,7 +1164,7 @@ class GitOperations:
                         matching_branch = ref
 
                         # prefer the default branch if it matches
-                        if ref.remote_head == default_branch:
+                        if ref.remote_head == preferred_branch:
                             break
 
                 if matching_branch is not None:
@@ -1150,8 +1191,8 @@ class GitOperations:
                     branch_name = f"yagso/{current_commit.hexsha[:7]}"
 
                 branch = repo.create_head(branch_name, current_commit.hexsha, force=True)
-                if repo.remotes:
-                    remote_name = repo.remotes[0].name
+                remote_name = self.get_remote_name(repo)
+                if remote_name is not None:
                     remote_ref = git.RemoteReference(
                         repo, f"refs/remotes/{remote_name}/{branch_name}")
                     branch.set_tracking_branch(remote_ref)
