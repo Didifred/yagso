@@ -15,6 +15,28 @@ from tests.common import BaseGitTest
 
 class TestGitOps(BaseGitTest):
 
+    def test_get_remote_name_prefers_current_branch_upstream(self):
+        git_ops = GitOperations.__new__(GitOperations)
+        git_ops._repo = MagicMock()
+        upstream = MagicMock()
+        upstream.remote_name = 'upstream'
+        git_ops._repo.active_branch.tracking_branch.return_value = upstream
+        origin_remote = MagicMock()
+        origin_remote.name = 'origin'
+        git_ops._repo.remotes = [origin_remote]
+
+        self.assertEqual(git_ops.get_remote_name(), 'upstream')
+
+    def test_get_remote_name_falls_back_to_origin_without_upstream(self):
+        git_ops = GitOperations.__new__(GitOperations)
+        git_ops._repo = MagicMock()
+        git_ops._repo.active_branch.tracking_branch.return_value = None
+        origin_remote = MagicMock()
+        origin_remote.name = 'origin'
+        git_ops._repo.remotes = [origin_remote]
+
+        self.assertEqual(git_ops.get_remote_name(), 'origin')
+
     def test_push_all_passes_dry_run_to_git(self):
         git_ops = GitOperations.__new__(GitOperations)
         git_ops._repo = MagicMock()
