@@ -170,35 +170,40 @@ class GitOperations:
         return ref
 
     @staticmethod
-    def get_remote_name(repo: git.Repo) -> Optional[str]:
-        """Return the current branch's upstream remote name, or ``origin`` as fallback."""
+    def get_remote_name(repo: git.Repo, name: str = 'origin') -> Optional[str]:
+        """Return the current branch's upstream remote name, or find by name"""
         remote_name = None
         try:
             upstream = repo.active_branch.tracking_branch()
-            if upstream is not None:
+            if upstream is not None and isinstance(upstream.remote_name, str):
                 remote_name = upstream.remote_name
         except (TypeError, ValueError):
             # A detached HEAD has no active branch or upstream.
             pass
 
-        if remote_name is None and any(remote.name == 'origin' for remote in repo.remotes):
-            remote_name = 'origin'
+        if remote_name is None:
+            for remote in repo.remotes:
+                if remote.name == name:
+                    remote_name = remote.name
+                    break
 
         return remote_name
 
     @staticmethod
-    def get_remote(repo: git.Repo) -> Optional[git.RemoteReference]:
-        """Return the current branch's upstream remote, or ``origin`` as fallback."""
+    def get_remote(repo: git.Repo, name: str = 'origin') -> Optional[git.Remote]:
+        """Return a push-capable upstream remote, or find by name."""
         upstream = None
         try:
             upstream = repo.active_branch.tracking_branch()
+            if upstream is not None and isinstance(upstream.remote_name, str):
+                upstream = repo.remote(upstream.remote_name)
         except (TypeError, ValueError):
             # A detached HEAD has no active branch or upstream.
             pass
 
         if upstream is None:
             for remote in repo.remotes:
-                if remote.name == 'origin':
+                if remote.name == name:
                     upstream = remote
                     break
 
@@ -590,7 +595,7 @@ class GitOperations:
             if desired_ref:
                 sub_repo = Repo(sub_repo_path)
                 resolved_sha = None
-                resolved_from_origin = False
+                resolved_from_remote = False
 
                 try:
                     resolved_sha = sub_repo.git.rev_parse(desired_ref)
@@ -602,18 +607,18 @@ class GitOperations:
                         origin_ref = f'{remote_name}/{desired_ref}'
                         try:
                             resolved_sha = sub_repo.git.rev_parse(origin_ref)
-                            resolved_from_origin = True
+                            resolved_from_remote = True
                         except Exception as e2:
                             raise RuntimeError(
                                 f"Failed to resolve sha of {desired_ref} in submodule "
                                 f"{submodule_def.name}") from e2
                     else:
                         raise RuntimeError(
-                            f"{desired_ref} doesn't exist in submodule {submodule_def.name}") from e
+                            f"Missing remote for submodule {submodule_def.name}") from e
 
                 if not GitOperations._sha_equal(current_commit, resolved_sha):
                     try:
-                        if resolved_from_origin:
+                        if resolved_from_remote:
                             # Create a new local branch tracking origin
                             sub_repo.git.checkout(
                                 "-b", desired_ref, "--track", origin_ref)
@@ -1009,17 +1014,15 @@ class GitOperations:
         """Push the root and YAGSO-created submodule commits."""
         summaries = []
         try:
-            remote = self.get_remote(self.repo)
 
             # Push top repository
-            if remote is None:
-                raise ValueError("No remote configured")
+            remote = self.get_remote(self.repo)
             results = remote.push(dry_run=dry_run)
 
             for info in results:
                 if info.flags & info.ERROR:
                     raise RuntimeError(f"Push failed: {info.summary}")
-                summary = info.summary.rstrip("\r\n")
+                summary = self._format_push_summary(self.repo, remote, info, dry_run)
                 msg = f"{Path(self.repo_path).name}: {summary}"
                 summaries.append(msg)
 
@@ -1046,12 +1049,14 @@ class GitOperations:
                         raise ValueError("No remote configured")
                     submodule_remote = self.get_remote(submodule_repo)
                     branch_name = submodule_repo.active_branch.name
+
                     refspec = f"HEAD:refs/heads/{branch_name}"
                     results = submodule_remote.push(refspec, dry_run=dry_run)
                     for info in results:
                         if info.flags & info.ERROR:
                             raise RuntimeError(f"Push failed: {info.summary}")
-                        summary = info.summary.rstrip("\r\n")
+                        summary = self._format_push_summary(
+                            submodule_repo, submodule_remote, info, dry_run)
                         msg = f"{Path(submodule.path).name}: {summary}"
                         summaries.append(msg)
 
@@ -1063,6 +1068,33 @@ class GitOperations:
             summaries.extend(self._push_yagso_submodules(submodule_repo, dry_run))
 
         return summaries
+
+    @staticmethod
+    def _format_push_summary(repo: git.Repo, remote: git.Remote, info, dry_run: bool) -> str:
+        """Include commit SHAs in dry-run push summaries when available."""
+        summary = info.summary.rstrip("\r\n")
+        if not dry_run or info.local_ref is None:
+            return summary
+
+        # dry run case
+        tip_commit = info.local_ref.commit
+        base_commit = info.old_commit
+
+        if base_commit is None and info.flags & info.NEW_HEAD:
+            try:
+                remote_head = repo.git.symbolic_ref(
+                    f"refs/remotes/{remote.name}/HEAD")
+                merge_bases = repo.merge_base(tip_commit, remote_head)
+                base_commit = merge_bases[0] if merge_bases else None
+            except (git.GitCommandError, ValueError):
+                base_commit = None
+
+        if base_commit is not None:
+            return f"{base_commit.hexsha[:7]}..{tip_commit.hexsha[:7]}"
+        if info.flags & info.NEW_HEAD:
+            return f"{tip_commit.hexsha[:7]}"
+
+        return summary
 
     @staticmethod
     def _is_yagso_commit(repo: git.Repo) -> bool:

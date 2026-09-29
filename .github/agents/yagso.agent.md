@@ -42,7 +42,7 @@ The agent follows a strict incremental development cycle:
 
 ### Code Organization
 - **Implementation Location**: All production code resides in `yagso/` directory following the layered architecture
-- **Test Location**: All tests reside in `tests/` directory using unittest framework
+- **Test Location**: All tests reside in `tests/` directory using unittest framework on python venv
 - **Documentation**: ARCHITECTURE.md and README.md serve as single source of truth
 
 ## Agent Capabilities
@@ -55,7 +55,7 @@ The agent follows a strict incremental development cycle:
 - Look first on existing design patterns in `yagso/` project source files in order to implement features
 
 ### Testing Strategy
-- Important : Execute any test under the project venv 
+- Execute any test under the python venv 
 - Write unit tests for all new functionality
 - In unit tests, mock network, database, filesystem and third-party API calls
 - Ensure test coverage for happy path and error scenarios

@@ -25,7 +25,7 @@ class TestGitOps(BaseGitTest):
         origin_remote.name = 'origin'
         git_ops._repo.remotes = [origin_remote]
 
-        self.assertEqual(git_ops.get_remote_name(), 'upstream')
+        self.assertEqual(git_ops.get_remote_name(git_ops.repo), 'upstream')
 
     def test_get_remote_name_falls_back_to_origin_without_upstream(self):
         git_ops = GitOperations.__new__(GitOperations)
@@ -35,17 +35,49 @@ class TestGitOps(BaseGitTest):
         origin_remote.name = 'origin'
         git_ops._repo.remotes = [origin_remote]
 
-        self.assertEqual(git_ops.get_remote_name(), 'origin')
+        self.assertEqual(git_ops.get_remote_name(git_ops.repo), 'origin')
+
+    def test_get_remote_converts_tracking_reference_to_remote(self):
+        git_ops = GitOperations.__new__(GitOperations)
+        git_ops._repo = MagicMock()
+        tracking_reference = MagicMock()
+        tracking_reference.remote_name = 'origin'
+        git_ops._repo.active_branch.tracking_branch.return_value = tracking_reference
+        origin = git_ops._repo.remote.return_value
+
+        self.assertIs(git_ops.get_remote(git_ops.repo), origin)
+        git_ops._repo.remote.assert_called_once_with('origin')
 
     def test_push_all_passes_dry_run_to_git(self):
         git_ops = GitOperations.__new__(GitOperations)
         git_ops._repo = MagicMock()
         origin = git_ops._repo.remote.return_value
+        git_ops._repo.active_branch.tracking_branch.return_value = origin
         git_ops._repo.submodules = []
 
         git_ops.push_all(dry_run=True)
 
         origin.push.assert_called_once_with(dry_run=True)
+
+    def test_dry_run_new_branch_summary_includes_sha_range(self):
+        repo = MagicMock()
+        remote = MagicMock()
+        remote.name = 'origin'
+        info = MagicMock()
+        info.summary = '[new branch]\n'
+        info.flags = git.remote.PushInfo.NEW_HEAD
+        info.local_ref.commit.hexsha = 'a' * 40
+        info.old_commit = None
+        base_commit = MagicMock()
+        base_commit.hexsha = 'b' * 40
+        repo.git.symbolic_ref.return_value = 'refs/remotes/origin/main'
+        repo.merge_base.return_value = [base_commit]
+
+        summary = GitOperations._format_push_summary(repo, remote, info, dry_run=True)
+
+        self.assertEqual(
+            summary,
+            f"[new branch] ({'b' * 40}..{'a' * 40})")
 
     def test_push_all_pushes_only_yagso_submodule_commits(self):
         git_ops = GitOperations.__new__(GitOperations)
@@ -59,6 +91,7 @@ class TestGitOps(BaseGitTest):
         yagso_repo.submodules = []
         yagso_repo.active_branch.name = "yagso/test"
         yagso_remote = MagicMock()
+        yagso_repo.active_branch.tracking_branch.return_value = yagso_remote
         yagso_repo.remotes = [yagso_remote]
 
         user_submodule = MagicMock()
