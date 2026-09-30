@@ -86,6 +86,10 @@ option. It enables exception tracebacks in the CLI output, for example:
 
 - **`yagso configure`**: Applies the manifest configuration to the repository.
 
+   Writable properties are *name*, *path*, *url*, *commit* (any branch name, tag name or sha256) and *tracking_branch*.
+
+   *ref*, *active_branch* are Read Only properties .
+
 - **`yagso status`**: Read-only dry run — reports, for every submodule in the manifest, whether it is modified, moved, added or would be removed compared to the current repository state. Nothing is written; it is a preview of what `configure` would do.
 
 - **`yagso commit --message <msg>`**: Commits changes recursively, including `.gitmodules`, index changes, and the manifest file itself.
