@@ -27,12 +27,17 @@ To build the Python package, ensure you have Python 3.8+ installed and follow th
    ```
 
 3. Activate the virtual environment:
-   - On Windows: 
-      `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
-      `.venv\Scripts\activate`
+   - On Windows:
+     ```bash
+     Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+     .venv\Scripts\activate
+     ```
 
-   - On macOS/Linux: 
-      `source .venv/bin/activate`
+   - On macOS/Linux:
+     ```bash
+     source .venv/bin/activate
+     ```
+     
 <br/>
 
 4. Install the build dependencies:
@@ -71,12 +76,17 @@ export PATH="$PATH:/home/$(USER)/.local/bin"
    ```
 3. Activate the virtual environment:
    - On Windows:
-      `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
-      `.venv\Scripts\activate` 
-<br/>
+     ```bash
+      Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+      .venv\Scripts\activate
+     ```  
+   <br/>
+   
    - On macOS/Linux:
-      `source .venv/bin/activate`
-<br/>
+     ```bash
+     source .venv/bin/activate
+     ```
+   <br/>
 
 4. Install dependencies in editable mode for development:
    ```bash
