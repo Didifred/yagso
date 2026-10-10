@@ -2,7 +2,7 @@
 import unittest
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import git
 
@@ -11,6 +11,106 @@ from yagso.domain.submodule import SubmoduleDefinition
 from tests.common import BaseGitTest
 
 # pylint: disable=all
+
+
+class TestCommitMoveTags(unittest.TestCase):
+    """Tag movement tests independent of the shared sample repository."""
+
+    def test_commit_all_moves_only_head_tags(self) -> None:
+        """Move all old HEAD tags only for repositories receiving a new commit."""
+        scenarios = [
+            (True, True, True),
+            (False, True, False),
+            (True, False, False),
+        ]
+        for enabled, dirty, expected in scenarios:
+            with self.subTest(enabled=enabled, dirty=dirty):
+                repo = MagicMock()
+                repo.head.is_detached = False
+                repo.active_branch.name = 'main'
+                repo.working_tree_dir = 'root'
+                repo.is_dirty.return_value = True
+                child = MagicMock()
+                child.name = 'child-name'
+                child.path = 'libs/child'
+                child.module_exists.return_value = True
+                child_repo = child.module.return_value
+                child_repo.submodules = []
+                child_repo.is_dirty.return_value = dirty
+                tag = MagicMock()
+                tag.name = 'release'
+                tag.commit = child_repo.head.commit
+                second_tag = MagicMock()
+                second_tag.name = 'second-release'
+                second_tag.commit = child_repo.head.commit
+                unrelated_tag = MagicMock()
+                unrelated_tag.name = 'unrelated'
+                child_repo.tags = [tag, second_tag, unrelated_tag]
+                repo.submodules = [child]
+                with GitOperations(Path('root')) as ops:
+                    ops._repo = repo
+                    with patch.object(ops, '_checkout_ref_or_commit', return_value='main'):
+                        ops.commit_all('update', move_tags=enabled)
+                if expected:
+                    self.assertEqual(child_repo.git.tag.call_count, 2)
+                    child_repo.git.tag.assert_any_call('--force', '--', 'release', 'HEAD')
+                    child_repo.git.tag.assert_any_call('--force', '--', 'second-release', 'HEAD')
+                else:
+                    child_repo.git.tag.assert_not_called()
+                repo.git.tag.assert_not_called()
+
+    def test_commit_all_moves_nested_tags_after_commits(self) -> None:
+        """Move nested HEAD tags before committing the parent gitlink update."""
+        repo = MagicMock()
+        repo.head.is_detached = False
+        repo.working_tree_dir = 'root'
+        child = MagicMock()
+        child.path = 'libs/child'
+        child.name = 'child'
+        child_repo = child.module.return_value
+        leaf = MagicMock()
+        leaf.path = 'nested/leaf'
+        leaf.name = 'leaf'
+        leaf_repo = leaf.module.return_value
+        repo.submodules = [child]
+        child_repo.submodules = [leaf]
+        leaf_repo.submodules = []
+        child_repo.tags = []
+        tag = MagicMock()
+        tag.name = 'release'
+        tag.commit = leaf_repo.head.commit
+        leaf_repo.tags = [tag]
+        events = MagicMock()
+        events.attach_mock(leaf_repo.index.commit, 'leaf_commit')
+        events.attach_mock(leaf_repo.git.tag, 'leaf_tag')
+        events.attach_mock(child_repo.index.commit, 'child_commit')
+        events.attach_mock(repo.index.commit, 'root_commit')
+        with GitOperations(Path('root')) as ops:
+            ops._repo = repo
+            with patch.object(ops, '_checkout_ref_or_commit', return_value='main'):
+                ops.commit_all('update', move_tags=True)
+        self.assertEqual([event[0] for event in events.mock_calls],
+                         ['leaf_commit', 'leaf_tag', 'child_commit', 'root_commit'])
+
+    def test_commit_all_wraps_tag_move_error(self) -> None:
+        """Report a failed tag update through the existing commit error contract."""
+        repo = MagicMock()
+        repo.head.is_detached = False
+        child = MagicMock()
+        child.path = 'child'
+        child_repo = child.module.return_value
+        child_repo.submodules = []
+        tag = MagicMock()
+        tag.name = 'release'
+        tag.commit = child_repo.head.commit
+        child_repo.tags = [tag]
+        child_repo.git.tag.side_effect = git.GitCommandError('tag', 1)
+        repo.submodules = [child]
+        with GitOperations(Path('root')) as ops:
+            ops._repo = repo
+            with patch.object(ops, '_checkout_ref_or_commit', return_value='main'):
+                with self.assertRaisesRegex(RuntimeError, 'Failed to commit changes'):
+                    ops.commit_all('update', move_tags=True)
 
 
 class TestGitOps(BaseGitTest):

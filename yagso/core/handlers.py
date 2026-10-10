@@ -74,7 +74,10 @@ class CommitHandler(CommandHandler):
         if not message:
             raise ValueError("Commit message is required")
 
-        self.orchestrator.commit_changes(message, root_path)
+        if options.get("move_tags", False):
+            self.orchestrator.commit_changes(message, root_path, move_tags=True)
+        else:
+            self.orchestrator.commit_changes(message, root_path)
         self.output.success(f"Committed changes: {message}")
 
 

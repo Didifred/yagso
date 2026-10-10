@@ -30,6 +30,30 @@ def _block(name="lib1", path="lib1", url="https://github.com/a/b.git",
     return block
 
 
+class TestCommitMoveTagsOrchestrator(unittest.TestCase):
+    """Check tag movement forwarding without manifest dependencies."""
+
+    def test_commit_changes_move_tags_does_not_load_manifest(self) -> None:
+        """Forward the flag without reading a manifest."""
+        orchestrator = SubmoduleOrchestrator(Path('root'))
+        with patch.object(orchestrator.manifest_manager, 'load_manifest') as load, \
+                patch('yagso.core.orchestrator.GitOperations') as operations:
+            orchestrator.commit_changes('update', move_tags=True)
+            load.assert_not_called()
+            operations.return_value.__enter__.return_value.commit_all.assert_called_once_with(
+                'update', move_tags=True)
+
+    def test_commit_changes_default_does_not_load_manifest(self) -> None:
+        """Keep the existing commit behavior when tag movement is disabled."""
+        orchestrator = SubmoduleOrchestrator(Path('root'))
+        with patch.object(orchestrator.manifest_manager, 'load_manifest') as load, \
+                patch('yagso.core.orchestrator.GitOperations') as operations:
+            orchestrator.commit_changes('update')
+            load.assert_not_called()
+            operations.return_value.__enter__.return_value.commit_all.assert_called_once_with(
+                'update')
+
+
 class TestSearchSubmodule(unittest.TestCase):
 
     def setUp(self):

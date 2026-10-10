@@ -1,15 +1,17 @@
 """Integration test of yagso cli commands (controller.py) """
 import unittest
 import copy
+import tempfile
+from contextlib import ExitStack
 from io import StringIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from git import Repo
 from rich.console import Console
 
 from yagso.cli.formatter import OutputFormatter, get_output_formatter
 from yagso.cli.parser import ArgumentParser
-from yagso.core.handlers import GenerateHandler
+from yagso.core.handlers import CommitHandler, GenerateHandler
 from yagso.core.orchestrator import SubmoduleOrchestrator
 from yagso.infrastructure.git_ops import GitOperations
 from yagso.cli.controller import CLIController
@@ -18,6 +20,72 @@ from yagso.domain.submodule import SubmoduleDefinition
 from tests.common import BaseGitTest
 
 # pylint: disable=all
+
+
+class TestCommitMoveTagsCLI(unittest.TestCase):
+    """Check tag movement options without touching sample repositories."""
+
+    def test_commit_move_tags_updates_tag_and_parent_gitlink(self) -> None:
+        """Exercise the real CLI using temporary repositories without network access."""
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+            base = Path(directory)
+            source = Repo.init(base / 'source', initial_branch='main')
+            root = Repo.init(base / 'root', initial_branch='main')
+            resources.callback(source.close)
+            resources.callback(root.close)
+            for repo in (source, root):
+                with repo.config_writer() as config:
+                    config.set_value('user', 'name', 'YAGSO Test')
+                    config.set_value('user', 'email', 'test@example.com')
+            (base / 'source/file.txt').write_text('initial', encoding='utf-8')
+            source.git.add('file.txt')
+            older = source.index.commit('initial')
+            source.create_tag('unrelated')
+            (base / 'source/file.txt').write_text('release', encoding='utf-8')
+            source.git.add('file.txt')
+            original = source.index.commit('release')
+            source.create_tag('release')
+            source.create_tag('second-release')
+            root.index.commit('initial')
+            with root.git.custom_environment(GIT_ALLOW_PROTOCOL='file'):
+                root.git.submodule('add', '--name', 'child', str(base / 'source'), 'libs/child')
+            child = root.submodule('child').module()
+            resources.callback(child.close)
+            with child.config_writer() as config:
+                config.set_value('user', 'name', 'YAGSO Test')
+                config.set_value('user', 'email', 'test@example.com')
+            child.git.checkout('release')
+            root.git.add('--all')
+            root.index.commit('add submodule')
+            (base / 'root/libs/child/file.txt').write_text('modified', encoding='utf-8')
+            with patch.object(Path, 'cwd', return_value=base / 'root'):
+                result = CLIController().run(['commit', '--message', 'update', '--move-tags'])
+            self.assertEqual(result, CLIController.SUCCESS)
+            self.assertNotEqual(child.head.commit.hexsha, original.hexsha)
+            self.assertEqual(child.tags['release'].commit.hexsha, child.head.commit.hexsha)
+            self.assertEqual(child.tags['second-release'].commit.hexsha, child.head.commit.hexsha)
+            self.assertEqual(child.tags['unrelated'].commit.hexsha, older.hexsha)
+            self.assertFalse((base / 'root/yagso.yaml').exists())
+            self.assertEqual(root.head.commit.tree['libs/child'].hexsha, child.head.commit.hexsha)
+
+    def test_commit_move_tags_option_and_handler(self) -> None:
+        """Parse the opt-in flag and pass it through the command handler."""
+        parser = ArgumentParser()
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                args = ['commit', '--message', 'update']
+                if enabled:
+                    args.append('--move-tags')
+                options = parser.parse(args)
+                parser.validate(options)
+                self.assertEqual(options['move_tags'], enabled)
+                orchestrator = MagicMock()
+                CommitHandler(orchestrator).execute(options)
+                if enabled:
+                    orchestrator.commit_changes.assert_called_once_with(
+                        'update', Path.cwd(), move_tags=True)
+                else:
+                    orchestrator.commit_changes.assert_called_once_with('update', Path.cwd())
 
 
 class TestFormatter(unittest.TestCase):
@@ -629,7 +697,7 @@ class TestCli(BaseGitTest):
             self.assertTrue((lib3_submodule_path / '.git').exists())
             self.assertTrue(any(submodule.path == 'lib3' for submodule in lib2_repo.submodules))
 
-            result = controller.run(['commit', '--message', 'Test branch creation'])
+            result = controller.run(['commit', '--message', 'Test branch creation', '--move-tags'])
             self.assertEqual(result, 0)
 
             result = controller.run(['push', '--dry-run'])

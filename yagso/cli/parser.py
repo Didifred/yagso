@@ -85,6 +85,11 @@ class ArgumentParser:
             "--message",
             help="Commit message"
         )
+        commit_parser.add_argument(
+            "--move-tags",
+            action="store_true",
+            help="Move tags at submodule HEADs to their new commits"
+        )
 
         # push command
         _push_parser = subparsers.add_parser(
@@ -128,6 +133,7 @@ class ArgumentParser:
 
         elif parsed.command == "commit":
             options["message"] = getattr(parsed, "message", "")
+            options["move_tags"] = getattr(parsed, "move_tags", False)
         elif parsed.command == "push":
             options["dry_run"] = getattr(parsed, "dry_run", False)
 

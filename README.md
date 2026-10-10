@@ -33,7 +33,7 @@ To build the Python package, ensure you have Python 3.8+ installed and follow th
 
    - On macOS/Linux: 
       `source .venv/bin/activate`
-
+<br/>
 
 4. Install the build dependencies:
    ```bash
@@ -72,10 +72,11 @@ export PATH="$PATH:/home/$(USER)/.local/bin"
 3. Activate the virtual environment:
    - On Windows:
       `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
-      `.venv\Scripts\activate`
-
-   - On macOS/Linux: 
+      `.venv\Scripts\activate` 
+<br/>
+   - On macOS/Linux:
       `source .venv/bin/activate`
+<br/>
 
 4. Install dependencies in editable mode for development:
    ```bash
@@ -89,20 +90,27 @@ option. It enables exception tracebacks in the CLI output, for example:
 
 ## Commands
 
-- **`yagso generate`**: Generates the hierarchy of submodules from a Git root repository and produces a manifest file called `yagso.yaml` at the root of the Git repository.
+- **`yagso generate`**: Generates the hierarchy of submodules from a Git root repository 
+  and produces a manifest file called `yagso.yaml` at the root of the Git repository.
 
-- **`yagso generate --BOM --files <regex>`**: Generates in addition of the maniest, a bill of material BOM.yaml with an optional regex in order to filer files.
+- **`yagso generate --BOM --files <regex>`**: Generates in addition of the maniest, 
+   a bill of material BOM.yaml with an optional regex in order to filer files.
 
 - **`yagso configure`**: Applies the manifest configuration to the repository.
 
-   Writable properties are *name*, *path*, *url*, *commit* (any branch name, tag name or sha256) and *tracking_branch*.
-
+   Writable properties are *name*, *path*, *url*, *commit* (any branch name, tag name or sha256) 
+   and *tracking_branch*. 
    *ref*, *active_branch* are Read Only properties .
 
-- **`yagso status`**: Read-only dry run — reports, for every submodule in the manifest, whether it is modified, moved, added or would be removed compared to the current repository state. Nothing is written; it is a preview of what `configure` would do.
+- **`yagso status`**: Read-only dry run — reports, for every submodule in the manifest, 
+   whether it is modified, moved, added or would be removed compared to the current repository state. 
+   Nothing is written; it is a preview of what `configure` would do.
 
-- **`yagso commit --message <msg>`**: Commits changes recursively, including `.gitmodules`, index changes, and the manifest file itself.
+- **`yagso commit --message <msg>`**: Commits changes recursively, including `.gitmodules`, 
+   index changes, and the manifest file itself.
 
+- **`yagso commit --message <msg> --move-tags`**: Moves existing local tags pointing at a submodule's
+   pre-commit HEAD to its new commit when that submodule is bumped.
 
 These latest commands are simple git cli wrapper on a repo and its submodules (--recursive) :
 

@@ -119,14 +119,24 @@ class SubmoduleOrchestrator:
         self.manifest_manager.progress_current = 0
         self._sync_submodules(root_path, manifest.submodules)
 
-    def commit_changes(self, message: str, root_path: Optional[Path] = None) -> None:
-        """Commit all changes recursively."""
+    def commit_changes(self, message: str, root_path: Optional[Path] = None,
+                       move_tags: bool = False) -> None:
+        """Commit recursively, optionally moving submodule HEAD tags.
+
+        Args:
+            message: Message included in each new commit.
+            root_path: Repository root, defaulting to the orchestrator's path.
+            move_tags: Whether to move tags pointing at each submodule's old HEAD.
+        """
 
         if root_path is None:
             root_path = self.repo_path
 
         with GitOperations(root_path) as git_ops:
-            git_ops.commit_all(message)
+            if move_tags:
+                git_ops.commit_all(message, move_tags=True)
+            else:
+                git_ops.commit_all(message)
 
     def _sync_submodules(
             self,

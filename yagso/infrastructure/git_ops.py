@@ -982,8 +982,13 @@ class GitOperations:
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to update submodules : {e}") from e
 
-    def commit_all(self, message: str) -> None:
-        """Commit all changes recursively, deepest submodules first."""
+    def commit_all(self, message: str, move_tags: bool = False) -> None:
+        """Commit changes deepest first, optionally moving submodule HEAD tags.
+
+        Args:
+            message: Message included in each new commit.
+            move_tags: Whether to move tags pointing at each submodule's old HEAD.
+        """
         try:
 
             branch = ""
@@ -993,7 +998,8 @@ class GitOperations:
                 raise RuntimeError("Please checkout a branch first in order to commit.")
 
             # Walk the whole submodule tree bottom-up
-            branch = self._commit_recursive(self.repo, message, branch)
+            branch = self._commit_recursive(
+                self.repo, message, branch, move_tags)
 
             if self.repo.is_dirty():
                 # Checkout the repository to a branch
@@ -1127,7 +1133,8 @@ class GitOperations:
 
         return git_dir
 
-    def _commit_recursive(self, repo: git.Repo, message: str, branch: str) -> str:
+    def _commit_recursive(self, repo: git.Repo, message: str, branch: str,
+                          move_tags: bool = False) -> str:
         """Post-order DFS: commit deepest submodules before their parents."""
         for submodule in repo.submodules:
             if not submodule.module_exists():
@@ -1136,10 +1143,17 @@ class GitOperations:
             submodule_repo = submodule.module()
 
             # Recurse into this submodule's own submodules first
-            branch = self._commit_recursive(submodule_repo, message, branch)
+            branch = self._commit_recursive(
+                submodule_repo, message, branch, move_tags)
 
             # Commit only if something actually changed (file edits OR gitlink bump)
             if submodule_repo.is_dirty():
+                tag_names = []
+                if move_tags:
+                    current_commit = submodule_repo.head.commit
+                    tag_names = [tag.name for tag in submodule_repo.tags
+                                 if tag.commit == current_commit]
+
                 # First checkout on a branch
                 branch = self._checkout_ref_or_commit(submodule_repo, branch)
 
@@ -1148,6 +1162,8 @@ class GitOperations:
 
                 # Commit the changes in this submodule
                 submodule_repo.index.commit(f"bump change in {submodule.name} : {message}")
+                for tag_name in tag_names:
+                    submodule_repo.git.tag('--force', '--', tag_name, 'HEAD')
 
         return branch
 
