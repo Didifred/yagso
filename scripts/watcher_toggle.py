@@ -1,21 +1,23 @@
 """Add or remove specific `files.watcherExclude` entries in .vscode/settings.json.
-    add_watcherExclude() - Adds the following keys to `files.watcherExclude` in .vscode/settings.json:
-        "**/tests/**/yagso_test_root/**"
-    remove_watcherExclude() - Removes the above keys from `files.watcherExclude` in .vscode/settings.json.
-    If .vscode/settings.json does not exist, the functions will print a message and exit with a non-zero status code.
-
+    add_watcher_exclude() - Adds the following keys to `files.watcherExclude`
+    in .vscode/settings.json:"**/tests/**/yagso_test_root/**"
+    remove_watcher_exclude() - Removes the above keys from `files.watcherExclude`
+    in .vscode/settings.json.
+    If .vscode/settings.json does not exist, the functions will print a message
+    and exit with a non-zero status code.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import git
 from pathlib import Path
 from typing import Dict, Any, Iterable
+import git
 
 
 class WatcherToggle:
+    """ Helper class to remove VS code watching on .git"""
 
     def _find_settings_path(self) -> Path | None:
         here = Path(__file__).resolve()
@@ -72,7 +74,8 @@ class WatcherToggle:
 
         return removed
 
-    def add_watcherExclude(self):
+    def add_watcher_exclude(self):
+        """Add watcher exclude keys"""
         settings_path = self._find_settings_path()
         if not settings_path or not settings_path.exists():
             print("No .vscode/settings.json found. Exiting.")
@@ -99,7 +102,8 @@ class WatcherToggle:
 
         print(f"Updated {settings_path} with watcherExclude keys.")
 
-    def remove_watcherExclude(self):
+    def remove_watcher_exclude(self):
+        """Remove watcher exclude keys"""
         settings_path = self._find_settings_path()
         if not settings_path or not settings_path.exists():
             print("No .vscode/settings.json found. Exiting.")
@@ -143,11 +147,9 @@ class WatcherToggle:
                 self._refresh_scm(sm.module())
             except Exception as exc:
                 print(f"[SCM] failed to refresh submodule {sm.path}: {exc}")
-                pass
 
         try:
             repo.git.update_index("--refresh", with_exceptions=False)
             print(f"[SCM] refreshed → {repo.working_dir}")
         except Exception as exc:
             print(f"[SCM] failed to refresh {repo.working_dir}: {exc}")
-            return

@@ -706,8 +706,8 @@ class GitOperations:
                     if url is not None and name is not None:
                         if not self.is_same_repo(url, existing_url):
                             raise RuntimeError(
-                                f"Existing repository at {path} does not match requested submodule URL: "
-                                f"{url} != {existing_url}")
+                                f"Existing repository at {path} does not match "
+                                f"requested submodule URL: {url} != {existing_url}")
 
                         # Register a matching existing repository without recloning it.
                         add_args = ['add', '--force']

@@ -13,15 +13,18 @@ class TestWatcherToggle(unittest.TestCase):
 
         toggle = WatcherToggle()
 
-        toggle.add_watcherExclude()
+        toggle.add_watcher_exclude()
 
         settings_path = toggle._find_settings_path()
         self.assertIsNotNone(settings_path)
-        settings = json.loads(settings_path.read_text(encoding="utf-8"))
-        self.assertIn("files.watcherExclude", settings)
-        self.assertTrue(settings["files.watcherExclude"].get("**/tests/**/yagso_test_root/**"))
 
-        toggle.remove_watcherExclude()
+        if settings_path is not None:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertIn("files.watcherExclude", settings)
+            self.assertTrue(settings["files.watcherExclude"].get("**/tests/**/yagso_test_root/**"))
 
-        settings = json.loads(settings_path.read_text(encoding="utf-8"))
-        self.assertNotIn("files.watcherExclude", settings)
+        toggle.remove_watcher_exclude()
+
+        if settings_path is not None:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertNotIn("files.watcherExclude", settings)

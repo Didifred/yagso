@@ -28,14 +28,14 @@ class BaseGitTest(unittest.TestCase):
         cls.wt = WatcherToggle()
 
         # Ensure VS Code watcher excludes are enabled for tests
-        cls.wt.add_watcherExclude()
+        cls.wt.add_watcher_exclude()
 
     @classmethod
     def tearDownClass(cls):
         """Clean up test repository state after all tests have run.
         """
         # Restore VS Code watcher excludes to original state
-        cls.wt.remove_watcherExclude()
+        cls.wt.remove_watcher_exclude()
 
         # Refresh SCM to ensure any changes made during tests are reflected
         cls.wt.refresh_all_scm(cls._test_root)
