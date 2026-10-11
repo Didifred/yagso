@@ -6,7 +6,7 @@ from typing import Protocol
 class OutputPort(Protocol):
     """Interface used by YAGSO layers to report command output."""
 
-    def print(self, messsage: str) -> None:
+    def print(self, message: str) -> None:
         """Simple print on terminal."""
 
     def success(self, message: str) -> None:
@@ -25,7 +25,7 @@ class OutputPort(Protocol):
 class NullOutput:
     """Output implementation for library callers that do not need display output."""
 
-    def print(self, messsage: str) -> None:
+    def print(self, message: str) -> None:
         """Simple print on terminal."""
 
     def success(self, message: str) -> None:

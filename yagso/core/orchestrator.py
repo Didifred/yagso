@@ -31,7 +31,7 @@ class SearchResult:
 class SubmoduleOrchestrator:
     """High-level coordination of submodule operations."""
 
-    def __init__(self, repo_path: Path, output: OutputPort = None):
+    def __init__(self, repo_path: Path, output: OutputPort):
         """Initialize with repository path."""
         self.repo_path = repo_path
         self.output = output or NullOutput()
@@ -300,7 +300,7 @@ class SubmoduleOrchestrator:
     def _diff_manifest(
             self,
             root_path: Path,
-            submodules: List[SubmoduleDefinition]) -> None:
+            submodules: List[SubmoduleDefinition]) -> bool:
         """Classify manifest submodules against the current .gitmodules blocks.
 
         This mirrors the recursion used by ``_sync_child_submodules``: each
@@ -350,25 +350,28 @@ class SubmoduleOrchestrator:
                               search_result: SearchResult) -> None:
         self.output.print(f"submodule {submodule_def.path} MODIFIED :")
 
-        current_name = search_result.block.get('name')
-        if current_name != submodule_def.name:
-            self.output.print(f"  name change from {current_name} to {submodule_def.name}")
+        if search_result.block is not None:
+            current_name = search_result.block.get('name')
+            if current_name != submodule_def.name:
+                self.output.print(f"  name change from {current_name} to {submodule_def.name}")
 
-        current_url = search_result.block.get('url')
-        if current_url != submodule_def.url:
-            self.output.print(f"  url change from {current_url} to {submodule_def.url}")
+            current_url = search_result.block.get('url')
+            if current_url != submodule_def.url:
+                self.output.print(f"  url change from {current_url} to {submodule_def.url}")
 
-        current_tracking_branch = search_result.block.get('branch')
-        if current_tracking_branch != submodule_def.tracking_branch:
-            self.output.print(
-                f"  tracking branch change from {current_tracking_branch} to "
-                f"{submodule_def.tracking_branch}")
+            current_tracking_branch = search_result.block.get('branch')
+            if current_tracking_branch != submodule_def.tracking_branch:
+                self.output.print(
+                    f"  tracking branch change from {current_tracking_branch} to "
+                    f"{submodule_def.tracking_branch}")
 
-        current_commit = search_result.block.get('commit')
-        if current_commit != submodule_def.commit:
-            out_current_commit = GitOperations.convert_to_short_sha(current_commit)
-            out_sub_commit = GitOperations.convert_to_short_sha(submodule_def.commit)
-            self.output.print(f"  commit change from {out_current_commit} to {out_sub_commit}")
+            current_commit = search_result.block.get('commit')
+            if current_commit is not None:
+                if current_commit != submodule_def.commit:
+                    out_current_commit = GitOperations.convert_to_short_sha(current_commit)
+                    out_sub_commit = GitOperations.convert_to_short_sha(submodule_def.commit)
+                    self.output.print(
+                        f"  commit change from {out_current_commit} to {out_sub_commit}")
 
     def _print_move_submodule(self, name: str, new_path: str) -> None:
         self.output.print(f"submodule {name} MOVED to {new_path}")

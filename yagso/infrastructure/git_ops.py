@@ -127,7 +127,14 @@ class GitOperations:
             GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10",
         )
         try:
-            references = g.ls_remote(url, 'HEAD').strip()
+            raw_output = g.ls_remote(url, 'HEAD')
+            if isinstance(raw_output, tuple):
+                output = raw_output[1]
+            else:
+                output = raw_output
+            if isinstance(output, bytes):
+                output = output.decode(errors='replace')
+            references = output.strip()
         except git.GitCommandError as e:
             raise IOError(f"Repository URL is not accessible: {url}: {e}") from e
 
@@ -192,11 +199,11 @@ class GitOperations:
     @staticmethod
     def get_remote(repo: git.Repo, name: str = 'origin') -> Optional[git.Remote]:
         """Return a push-capable upstream remote, or find by name."""
-        upstream = None
+        upstream: Optional[git.Remote] = None
         try:
-            upstream = repo.active_branch.tracking_branch()
-            if upstream is not None and isinstance(upstream.remote_name, str):
-                upstream = repo.remote(upstream.remote_name)
+            tracking_ref = repo.active_branch.tracking_branch()
+            if tracking_ref is not None and isinstance(tracking_ref.remote_name, str):
+                upstream = repo.remote(tracking_ref.remote_name)
         except (TypeError, ValueError):
             # A detached HEAD has no active branch or upstream.
             pass
@@ -590,12 +597,13 @@ class GitOperations:
 
             current_commit = self.get_recorded_commit(submodule_def.path)
             desired_ref = submodule_def.commit
+            sub_repo = Repo(sub_repo_path)
 
             # Only attempt resolution/checkout when a desired ref is provided
             if desired_ref:
-                sub_repo = Repo(sub_repo_path)
                 resolved_sha = None
                 resolved_from_remote = False
+                origin_ref = None
 
                 try:
                     resolved_sha = sub_repo.git.rev_parse(desired_ref)
@@ -618,7 +626,7 @@ class GitOperations:
 
                 if not GitOperations._sha_equal(current_commit, resolved_sha):
                     try:
-                        if resolved_from_remote:
+                        if resolved_from_remote and origin_ref is not None:
                             # Create a new local branch tracking origin
                             sub_repo.git.checkout(
                                 "-b", desired_ref, "--track", origin_ref)
@@ -654,7 +662,7 @@ class GitOperations:
             raise ValueError(f"Submodule not found: {submodule_def.path}: {e}") from e
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to sync submodule {submodule_def.name}: {e}") from e
-        except git.exc.InvalidGitRepositoryError as e:
+        except git.InvalidGitRepositoryError as e:
             raise RuntimeError(f"Submodule repository error for {submodule_def.path}: {e}") from e
 
     def add_submodule(self, submodule_def: SubmoduleDefinition) -> None:
@@ -695,21 +703,25 @@ class GitOperations:
                 with GitOperations(full_path) as ops:
                     existing_url = ops.get_repository_url()
 
-                if not self.is_same_repo(url, existing_url):
-                    raise RuntimeError(
-                        f"Existing repository at {path} does not match requested submodule URL: "
-                        f"{url} != {existing_url}")
+                    if url is not None and name is not None:
+                        if not self.is_same_repo(url, existing_url):
+                            raise RuntimeError(
+                                f"Existing repository at {path} does not match requested submodule URL: "
+                                f"{url} != {existing_url}")
 
-                # Register a matching existing repository without recloning it.
-                add_args = ['add', '--force']
-                if desired_branch:
-                    add_args[1:1] = ['-b', desired_branch]
-                if name:
-                    add_args.extend(['--name', name])
-                add_args.extend([url, path])
+                        # Register a matching existing repository without recloning it.
+                        add_args = ['add', '--force']
+                        if desired_branch:
+                            add_args[1:1] = ['-b', desired_branch]
+                        if name:
+                            add_args.extend(['--name', name])
+                        add_args.extend([url, path])
 
-                self.repo.git.submodule(*add_args)
-                subrepo = self.repo.submodule(name).module()
+                        self.repo.git.submodule(*add_args)
+                        subrepo = self.repo.submodule(name).module()
+                    else:
+                        raise RuntimeError(
+                            f"Existing repository at {path} does not have a URL.")
             else:
                 raise RuntimeError(
                     f"Fail to add submodule at {path}, non empty folder already exists.")
@@ -1008,9 +1020,10 @@ class GitOperations:
                 # Stage the top-level repo last (picks up all gitlink updates)
                 self.repo.git.add(update=True)
 
-                # Commit the changes in module
-                self.repo.index.commit(
-                    f"bump change in {Path(self.repo.working_tree_dir).name} : {message}")
+                if self.repo.working_tree_dir is not None:
+                    # Commit the changes in module
+                    self.repo.index.commit(
+                        f"bump change in {Path(self.repo.working_tree_dir).name} : {message}")
             else:
                 raise UserWarning("No changes to commit")
         except git.GitCommandError as e:
@@ -1023,16 +1036,18 @@ class GitOperations:
 
             # Push top repository
             remote = self.get_remote(self.repo)
-            results = remote.push(dry_run=dry_run)
 
-            for info in results:
-                if info.flags & info.ERROR:
-                    raise RuntimeError(f"Push failed: {info.summary}")
-                summary = self._format_push_summary(self.repo, remote, info, dry_run)
-                msg = f"{Path(self.repo_path).name}: {summary}"
-                summaries.append(msg)
+            if remote is not None:
+                results = remote.push(dry_run=dry_run)
 
-            summaries.extend(self._push_yagso_submodules(self.repo, dry_run))
+                for info in results:
+                    if info.flags & info.ERROR:
+                        raise RuntimeError(f"Push failed: {info.summary}")
+                    summary = self._format_push_summary(self.repo, remote, info, dry_run)
+                    msg = f"{Path(self.repo_path).name}: {summary}"
+                    summaries.append(msg)
+
+                summaries.extend(self._push_yagso_submodules(self.repo, dry_run))
 
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to push changes: {e}") from e
@@ -1054,17 +1069,19 @@ class GitOperations:
                     if not submodule_repo.remotes:
                         raise ValueError("No remote configured")
                     submodule_remote = self.get_remote(submodule_repo)
-                    branch_name = submodule_repo.active_branch.name
 
-                    refspec = f"HEAD:refs/heads/{branch_name}"
-                    results = submodule_remote.push(refspec, dry_run=dry_run)
-                    for info in results:
-                        if info.flags & info.ERROR:
-                            raise RuntimeError(f"Push failed: {info.summary}")
-                        summary = self._format_push_summary(
-                            submodule_repo, submodule_remote, info, dry_run)
-                        msg = f"{Path(submodule.path).name}: {summary}"
-                        summaries.append(msg)
+                    if submodule_remote is not None:
+                        branch_name = submodule_repo.active_branch.name
+
+                        refspec = f"HEAD:refs/heads/{branch_name}"
+                        results = submodule_remote.push(refspec, dry_run=dry_run)
+                        for info in results:
+                            if info.flags & info.ERROR:
+                                raise RuntimeError(f"Push failed: {info.summary}")
+                            summary = self._format_push_summary(
+                                submodule_repo, submodule_remote, info, dry_run)
+                            msg = f"{Path(submodule.path).name}: {summary}"
+                            summaries.append(msg)
 
                 except git.GitCommandError as e:
                     raise RuntimeError(f"Failed to push changes: {e}") from e
@@ -1107,8 +1124,11 @@ class GitOperations:
         """Return whether the repository HEAD commit was created by YAGSO."""
         is_yagso_commit = False
         try:
-            is_yagso_commit = repo.head.commit.message.startswith("bump change in ")
-        except (ValueError, git.GitCommandError):
+            message = repo.head.commit.message
+            if isinstance(message, bytes):
+                message = message.decode("utf-8", errors="replace")
+            is_yagso_commit = message.startswith("bump change in ")
+        except (ValueError, git.GitCommandError, AttributeError):
             pass
 
         return is_yagso_commit
@@ -1218,6 +1238,7 @@ class GitOperations:
                 if matching_branch is not None:
                     break
 
+        branch_name = '<unresolved>'
         try:
             if matching_branch is not None:
                 branch_name = matching_branch.name
@@ -1271,11 +1292,29 @@ class OrderedGitConfigParser(GitConfigParser):
         super().__init__(file_or_files, read_only=read_only)
         self.field_order = field_order or self.DEFAULT_FIELD_ORDER
 
+    def _get_write_path(self):
+        """Resolve a filesystem path for writing config data."""
+        file_or_files = self._file_or_files
+
+        if isinstance(file_or_files, (str, bytes, os.PathLike)):
+            return os.fspath(file_or_files)
+
+        if isinstance(file_or_files, (list, tuple)):
+            for candidate in file_or_files:
+                if isinstance(candidate, (str, bytes, os.PathLike)):
+                    return os.fspath(candidate)
+
+        raise TypeError(
+            "OrderedGitConfigParser requires a filesystem path or a sequence of "
+            "paths to write. Pass an explicit file object to write() instead."
+        )
+
     def write(self, fp=None):
         """Write config with ordered fields"""
 
         if fp is None:
-            with open(self._file_or_files, 'w', encoding='utf-8') as fp:
+            file_path = self._get_write_path()
+            with open(file_path, 'w', encoding='utf-8') as fp:
                 try:
                     self._write_ordered(fp)
                 except IOError as e:

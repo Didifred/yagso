@@ -11,7 +11,7 @@ class CommandHandler(ABC):
     """Base class for command handlers."""
 
     def __init__(self, orchestrator: SubmoduleOrchestrator,
-                 output: OutputPort = None):
+                 output: OutputPort):
         """Initialize the handler with its application services."""
         self.orchestrator = orchestrator
         self.output = output or NullOutput()

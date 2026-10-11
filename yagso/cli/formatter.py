@@ -43,7 +43,8 @@ class OutputFormatter:
 
     def error(self, message: str) -> None:
         """Display an error message."""
-        if self._progress is not None:
+        if self._progress is not None and self._bar_column is not None:
+
             self._bar_column.style = "bar.back"
             self._bar_column.complete_style = "red"
             self._bar_column.finished_style = "red"
@@ -81,18 +82,19 @@ class OutputFormatter:
         # Ensure current displayed is non-negative
         current_updated = max(current, 0)
 
-        self._progress.update(
-            self._task_id,
-            completed=current_updated,
-            total=total,
-            description=message or None,
-            refresh=True)
+        if self._task_id is not None:
+            self._progress.update(
+                self._task_id,
+                completed=current_updated,
+                total=total,
+                description=message or None,
+                refresh=True)
 
-        if current >= total:
-            self._progress.stop()
-            self._progress = None
-            self._task_id = None
-            self._bar_column = None
+            if current >= total:
+                self._progress.stop()
+                self._progress = None
+                self._task_id = None
+                self._bar_column = None
 
 
 def get_output_formatter() -> OutputFormatter:

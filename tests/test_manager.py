@@ -1,6 +1,7 @@
 """Test manager.py"""
 import unittest
 
+from yagso.cli.formatter import get_output_formatter
 from yagso.domain.bom import Bom
 from yagso.domain.manifest import Manifest
 from yagso.infrastructure.manifest_manager import ManifestManager
@@ -11,7 +12,8 @@ from yagso.infrastructure.manifest_manager import ManifestManager
 class TestGetSubmoduleFieldMerged(unittest.TestCase):
 
     def setUp(self):
-        self.manager = ManifestManager()
+        output = get_output_formatter()
+        self.manager = ManifestManager(output)
 
     def _manifest_dict(self):
         return {

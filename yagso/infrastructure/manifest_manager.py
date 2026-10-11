@@ -2,7 +2,7 @@
 
 import re
 from pathlib import Path
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 import yaml
 
 from .git_ops import GitOperations
@@ -15,7 +15,7 @@ from ..output import NullOutput, OutputPort
 class ManifestManager:
     """Handles reading/writing manifest files using Python's native file operations."""
 
-    def __init__(self, output: OutputPort = None):
+    def __init__(self, output: OutputPort):
         """Initialize the manager with an optional output port."""
         self.progress_current = 0
         self.progress_total = 0
@@ -392,7 +392,7 @@ class ManifestManager:
         `files` list containing files in the repository at that submodule path.
         """
         def _conv(sub: SubmoduleDefinition):
-            entry = {"path": sub.path}
+            entry: Dict[str, Any] = {"path": sub.path}
 
             # keep commit as requested
             if getattr(sub, 'commit', None):

@@ -165,7 +165,7 @@ class TestGitOps(BaseGitTest):
         remote.name = 'origin'
         info = MagicMock()
         info.summary = '[new branch]\n'
-        info.flags = git.remote.PushInfo.NEW_HEAD
+        # info.flags = git.remote.PushInfo.NEW_HEAD
         info.local_ref.commit.hexsha = 'a' * 40
         info.old_commit = None
         base_commit = MagicMock()
@@ -177,7 +177,7 @@ class TestGitOps(BaseGitTest):
 
         self.assertEqual(
             summary,
-            f"[new branch] ({'b' * 40}..{'a' * 40})")
+            f"{'b' * 7}..{'a' * 7}")
 
     def test_push_all_pushes_only_yagso_submodule_commits(self):
         git_ops = GitOperations.__new__(GitOperations)

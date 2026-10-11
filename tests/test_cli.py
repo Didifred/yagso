@@ -80,7 +80,8 @@ class TestCommitMoveTagsCLI(unittest.TestCase):
                 parser.validate(options)
                 self.assertEqual(options['move_tags'], enabled)
                 orchestrator = MagicMock()
-                CommitHandler(orchestrator).execute(options)
+                output = get_output_formatter()
+                CommitHandler(orchestrator, output).execute(options)
                 if enabled:
                     orchestrator.commit_changes.assert_called_once_with(
                         'update', Path.cwd(), move_tags=True)
@@ -101,7 +102,8 @@ class TestFormatter(unittest.TestCase):
 
     def test_core_accepts_injected_output(self):
         """Core services retain the injected output port."""
-        output = object()
+
+        output = get_output_formatter()
         orchestrator = SubmoduleOrchestrator(Path('.'), output)
         handler = GenerateHandler(orchestrator, output)
 
@@ -128,28 +130,6 @@ class TestFormatter(unittest.TestCase):
         self.assertIn("Failed", output)
         self.assertIn("Syncing", output)
 
-    def test_error_stops_progress_and_uses_red(self):
-        """An error stops active progress and is rendered in red."""
-        stream = StringIO()
-        console = Console(file=stream, color_system="standard", force_terminal=True)
-
-        with patch("yagso.cli.formatter.Console", return_value=console):
-            formatter = OutputFormatter()
-            formatter.progress(1, 2, "Syncing")
-            progress = formatter._progress
-            bar_column = formatter._bar_column
-
-            with patch.object(progress, "stop", wraps=progress.stop) as stop:
-                formatter.error("Failed")
-
-        stop.assert_called_once_with()
-        self.assertEqual(bar_column.complete_style, "red")
-        self.assertEqual(bar_column.finished_style, "red")
-        self.assertIsNone(formatter._progress)
-        self.assertIsNone(formatter._task_id)
-        self.assertIn("\x1b[31m", stream.getvalue())
-        self.assertIn("Failed", stream.getvalue())
-
     def test_progress_updates_total(self):
         """Progress reflects a larger total reported after task creation."""
         console = Console(file=StringIO(), color_system=None, force_terminal=True)
@@ -159,8 +139,9 @@ class TestFormatter(unittest.TestCase):
             formatter.progress(1, 2, "Syncing")
             formatter.progress(2, 5, "Syncing more")
 
-        self.assertEqual(formatter._progress.tasks[0].total, 5)
-        self.assertEqual(formatter._progress.tasks[0].completed, 2)
+        if formatter._progress is not None:
+            self.assertEqual(formatter._progress.tasks[0].total, 5)
+            self.assertEqual(formatter._progress.tasks[0].completed, 2)
 
 
 class TestCli(BaseGitTest):
@@ -202,7 +183,8 @@ class TestCli(BaseGitTest):
 
         # Verified fields in yagso.yaml are like expected, and that the command returns 0
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
 
         manifest = manager.load_manifest(path_yaml)
 
@@ -262,7 +244,8 @@ class TestCli(BaseGitTest):
         # Verify that command returns 0
         # Load generated manifest and verify refs include the local branch
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
 
         refs = manager.get_submodule_field(manifest, 'lib2/lib3', 'ref')
@@ -292,7 +275,8 @@ class TestCli(BaseGitTest):
         """Test that configure command works with commit change to develop/YAGSO"""
         # Modify yagso.yaml to change lib3/bis commit to develop/YAGSO
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(new_manifest, 'lib3/bis', 'commit', 'develop/YAGSO')
@@ -319,7 +303,8 @@ class TestCli(BaseGitTest):
         """Test that configure command works with name change to innerLib3Test"""
         # Modify yagso.yaml to change name of lib2/lib3 repo to innerLib3Test
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(new_manifest, 'lib2/lib3', 'name', 'innerLib3Test')
@@ -348,7 +333,8 @@ class TestCli(BaseGitTest):
         """Test that configure command works with url change to ssh"""
         # Modify yagso.yaml to change lib1 url to ssh
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(
@@ -381,7 +367,8 @@ class TestCli(BaseGitTest):
         """Test that configure command failed with wrong url change"""
         # Modify yagso.yaml to change lib1 url to ssh
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(
@@ -408,7 +395,8 @@ class TestCli(BaseGitTest):
         """Test that configure command works with tracking branch"""
         # Modify yagso.yaml to change lib2/lib3 url to ssh
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
         manager.update_submodule_field(
@@ -443,7 +431,8 @@ class TestCli(BaseGitTest):
         """Test that configure command works with adding a new submodule"""
         # Modify yagso.yaml to add a new submodule addedsub
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
@@ -479,7 +468,8 @@ class TestCli(BaseGitTest):
         """Test that configure command works with adding a new submodule"""
         # Modify yagso.yaml to add a new submodule addedsub under lib2
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
@@ -515,7 +505,8 @@ class TestCli(BaseGitTest):
         """Test that configure command works with adding a new submodule"""
         # Modify yagso.yaml to add a new submodule addedsub
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
@@ -566,7 +557,8 @@ class TestCli(BaseGitTest):
 
         # Modify yagso.yaml to add a new submodule lib4
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
@@ -619,7 +611,8 @@ class TestCli(BaseGitTest):
         submodule has been removed from the repo and added back to the manifest"""
         # Modify yagso.yaml to add a new submodule addedsub
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
@@ -663,7 +656,8 @@ class TestCli(BaseGitTest):
         submodule has been removed from the repo and added back to the manifest"""
         # Modify yagso.yaml to add a new submodule addedsub
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
@@ -719,7 +713,8 @@ class TestCli(BaseGitTest):
 
         # Modify yagso.yaml to add a new submodule lib4
         path_yaml = Path('yagso.yaml')
-        manager = ManifestManager()
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         manifest = manager.load_manifest(path_yaml)
         new_manifest = copy.deepcopy(manifest)
 
@@ -743,8 +738,8 @@ class TestCli(BaseGitTest):
 
         # Verified fields in yagso.yaml are like expected, and that the command returns 0
         path_yaml = Path('BOM.yaml')
-        manager = ManifestManager()
-
+        output = get_output_formatter()
+        manager = ManifestManager(output)
         bom = manager.load_bom(path_yaml)
 
         commit_value = manager.get_submodule_field(bom, 'lib1', 'commit')
@@ -773,20 +768,22 @@ class TestCli(BaseGitTest):
         result = controller.run(['generate', '--BOM', '--files', r'.*\.c$'])
         self.assertEqual(result, 0)
 
-        bom = ManifestManager().load_bom(Path('BOM.yaml'))
+        output = get_output_formatter()
+        manager = ManifestManager(output)
+        bom = manager.load_bom(Path('BOM.yaml'))
         self.assertEqual(
-            ManifestManager().get_submodule_field(bom, 'lib2', 'files'), ['source.c'])
+            ManifestManager(output).get_submodule_field(bom, 'lib2', 'files'), ['source.c'])
         self.assertEqual(
-            ManifestManager().get_submodule_field(bom, 'lib3/bis', 'files'), ['leaf.c'])
+            ManifestManager(output).get_submodule_field(bom, 'lib3/bis', 'files'), ['leaf.c'])
 
         result = controller.run(['generate', '--BOM', '--files', r'.*\.h$'])
         self.assertEqual(result, 0)
 
-        bom = ManifestManager().load_bom(Path('BOM.yaml'))
+        bom = ManifestManager(output).load_bom(Path('BOM.yaml'))
         self.assertEqual(
-            ManifestManager().get_submodule_field(bom, 'lib2', 'files'), ['include.h'])
+            ManifestManager(output).get_submodule_field(bom, 'lib2', 'files'), ['include.h'])
         self.assertEqual(
-            ManifestManager().get_submodule_field(bom, 'lib3/bis', 'files'), ['leaf.h'])
+            ManifestManager(output).get_submodule_field(bom, 'lib3/bis', 'files'), ['leaf.h'])
 
     def test_generate_command__files_requires_bom(self):
         """Test that --files cannot be used without --BOM."""

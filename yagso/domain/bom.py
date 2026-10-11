@@ -4,7 +4,6 @@ from typing import List
 from dataclasses import dataclass
 
 from .submodule import SubmoduleDefinition
-from .manifest import Manifest
 
 
 @dataclass
