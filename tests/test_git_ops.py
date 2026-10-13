@@ -2,7 +2,7 @@
 import unittest
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import git
 
@@ -152,12 +152,117 @@ class TestGitOps(BaseGitTest):
         git_ops = GitOperations.__new__(GitOperations)
         git_ops._repo = MagicMock()
         origin = git_ops._repo.remote.return_value
-        git_ops._repo.active_branch.tracking_branch.return_value = origin
+        tracking_ref = MagicMock()
+        tracking_ref.remote_name = 'origin'
+        git_ops._repo.active_branch.tracking_branch.return_value = tracking_ref
         git_ops._repo.submodules = []
 
-        git_ops.push_all(dry_run=True)
+        git_ops.push_all(p_dry_run=True)
 
-        origin.push.assert_called_once_with(dry_run=True)
+        origin.push.assert_called_once_with(None, dry_run=True)
+
+    def test_push_all_force_pushes_only_moved_tags(self):
+        git_ops = GitOperations.__new__(GitOperations)
+        git_ops._repo = MagicMock()
+        repo = git_ops._repo
+        remote = repo.remote.return_value
+        remote.name = 'origin'
+        tracking_ref = MagicMock()
+        tracking_ref.remote_name = 'origin'
+        tracking_ref.remote_head = 'main'
+        repo.active_branch.tracking_branch.return_value = tracking_ref
+        repo.submodules = []
+
+        head_commit = MagicMock()
+        head_commit.hexsha = 'a' * 40
+        repo.head.commit = head_commit
+        tag = MagicMock()
+        tag.name = 'release'
+        tag.commit = head_commit
+        same_tag = MagicMock()
+        same_tag.name = 'same'
+        same_tag.commit = head_commit
+        repo.tags = [tag, same_tag]
+        repo.git.ls_remote.return_value = (
+            f"{'c' * 40}\trefs/tags/release\n"
+            f"{'b' * 40}\trefs/tags/release^{{}}\n"
+            f"{'a' * 40}\trefs/tags/same\n")
+
+        git_ops.push_all()
+
+        remote.push.assert_called_once_with(
+            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'], dry_run=False)
+
+    def test_push_all_uses_local_branch_without_upstream(self):
+        git_ops = GitOperations.__new__(GitOperations)
+        git_ops._repo = MagicMock()
+        repo = git_ops._repo
+        repo.active_branch.tracking_branch.return_value = None
+        repo.active_branch.name = 'main'
+        remote = MagicMock()
+        remote.name = 'origin'
+        repo.remotes = [remote]
+        repo.submodules = []
+        head_commit = MagicMock()
+        head_commit.hexsha = 'a' * 40
+        repo.head.commit = head_commit
+        tag = MagicMock()
+        tag.name = 'release'
+        tag.commit = head_commit
+        repo.tags = [tag]
+        repo.git.ls_remote.return_value = f"{'b' * 40}\trefs/tags/release\n"
+
+        git_ops.push_all()
+
+        remote.push.assert_called_once_with(
+            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'], dry_run=False)
+
+    def test_push_all_raises_on_push_error(self):
+        git_ops = GitOperations.__new__(GitOperations)
+        git_ops._repo = MagicMock()
+        git_ops._repo.tags = []
+        tracking_ref = MagicMock()
+        tracking_ref.remote_name = 'origin'
+        git_ops._repo.active_branch.tracking_branch.return_value = tracking_ref
+        info = MagicMock()
+        info.flags = info.ERROR = 1
+        info.summary = 'rejected'
+        git_ops._repo.remote.return_value.push.return_value = [info]
+
+        with self.assertRaisesRegex(RuntimeError, 'Push failed: rejected'):
+            git_ops.push_all()
+
+    def test_has_moved_head_tag_unchanged_annotated_tag(self):
+        repo = MagicMock()
+        remote = MagicMock()
+        remote.name = 'origin'
+        repo.head.commit.hexsha = 'a' * 40
+        tag = MagicMock()
+        tag.name = 'release'
+        tag.commit.hexsha = 'a' * 40
+        repo.tags = [tag]
+        repo.git.ls_remote.return_value = (
+            f"{'c' * 40}\trefs/tags/release\n"
+            f"{'a' * 40}\trefs/tags/release^{{}}\n")
+
+        self.assertEqual(GitOperations._get_moved_head_tags(repo, remote), [])
+        repo.git.ls_remote.assert_called_once_with(
+            '--tags', 'origin', 'refs/tags/release', 'refs/tags/release^{}')
+
+    def test_has_moved_head_tag_ignores_missing_remote_and_non_commit_tags(self):
+        repo = MagicMock()
+        remote = MagicMock()
+        remote.name = 'origin'
+        repo.head.commit.hexsha = 'a' * 40
+        tag = MagicMock()
+        tag.name = 'release'
+        tag.commit.hexsha = 'a' * 40
+        tree_tag = MagicMock()
+        type(tree_tag).commit = PropertyMock(side_effect=ValueError('tree'))
+        repo.tags = [tree_tag, tag]
+        repo.git.ls_remote.return_value = ''
+
+        self.assertEqual(GitOperations._get_moved_head_tags(repo, remote), [])
 
     def test_dry_run_new_branch_summary_includes_sha_range(self):
         repo = MagicMock()
@@ -183,6 +288,9 @@ class TestGitOps(BaseGitTest):
         git_ops = GitOperations.__new__(GitOperations)
         git_ops._repo = MagicMock()
         git_ops._repo.submodules = []
+        root_tracking_ref = MagicMock()
+        root_tracking_ref.remote_name = 'origin'
+        git_ops._repo.active_branch.tracking_branch.return_value = root_tracking_ref
 
         yagso_submodule = MagicMock()
         yagso_submodule.module_exists.return_value = True
@@ -191,7 +299,11 @@ class TestGitOps(BaseGitTest):
         yagso_repo.submodules = []
         yagso_repo.active_branch.name = "yagso/test"
         yagso_remote = MagicMock()
-        yagso_repo.active_branch.tracking_branch.return_value = yagso_remote
+        yagso_remote.name = 'origin'
+        tracking_ref = MagicMock()
+        tracking_ref.remote_name = 'origin'
+        yagso_repo.active_branch.tracking_branch.return_value = tracking_ref
+        yagso_repo.remote.return_value = yagso_remote
         yagso_repo.remotes = [yagso_remote]
 
         user_submodule = MagicMock()
@@ -205,7 +317,7 @@ class TestGitOps(BaseGitTest):
         git_ops.push_all()
 
         yagso_remote.push.assert_called_once_with(
-            "HEAD:refs/heads/yagso/test", dry_run=False)
+            ["HEAD:refs/heads/yagso/test"], dry_run=False)
         user_repo.remote.assert_not_called()
 
     @unittest.skip("Utility method test, not a real test case")

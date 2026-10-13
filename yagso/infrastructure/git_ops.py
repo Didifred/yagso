@@ -1029,7 +1029,7 @@ class GitOperations:
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to commit changes: {e}") from e
 
-    def push_all(self, dry_run: bool = False) -> List[str]:
+    def push_all(self, p_dry_run: bool = False) -> List[str]:
         """Push the root and YAGSO-created submodule commits."""
         summaries = []
         try:
@@ -1038,16 +1038,28 @@ class GitOperations:
             remote = self.get_remote(self.repo)
 
             if remote is not None:
-                results = remote.push(dry_run=dry_run)
+
+                refspecs = None
+                moved_tags = self._get_moved_head_tags(self.repo, remote)
+                if moved_tags:
+                    # Explicit refspecs bypass push.default, so the branch must be listed too.
+                    upstream = self.repo.active_branch.tracking_branch()
+                    if upstream is not None:
+                        branch_name = upstream.remote_head
+                    else:
+                        branch_name = self.repo.active_branch.name
+                    refspecs = [f"HEAD:refs/heads/{branch_name}"]
+                    refspecs += [f"+refs/tags/{t}:refs/tags/{t}" for t in moved_tags]
+                results = remote.push(refspecs, dry_run=p_dry_run)
 
                 for info in results:
                     if info.flags & info.ERROR:
                         raise RuntimeError(f"Push failed: {info.summary}")
-                    summary = self._format_push_summary(self.repo, remote, info, dry_run)
+                    summary = self._format_push_summary(self.repo, remote, info, p_dry_run)
                     msg = f"{Path(self.repo_path).name}: {summary}"
                     summaries.append(msg)
 
-                summaries.extend(self._push_yagso_submodules(self.repo, dry_run))
+                summaries.extend(self._push_yagso_submodules(self.repo, p_dry_run))
 
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to push changes: {e}") from e
@@ -1056,7 +1068,7 @@ class GitOperations:
 
         return summaries
 
-    def _push_yagso_submodules(self, repo: git.Repo, dry_run: bool) -> List[str]:
+    def _push_yagso_submodules(self, repo: git.Repo, p_dry_run: bool) -> List[str]:
         """Recursively push only submodules whose HEAD was committed by YAGSO."""
         summaries = []
         for submodule in repo.submodules:
@@ -1073,13 +1085,15 @@ class GitOperations:
                     if submodule_remote is not None:
                         branch_name = submodule_repo.active_branch.name
 
-                        refspec = f"HEAD:refs/heads/{branch_name}"
-                        results = submodule_remote.push(refspec, dry_run=dry_run)
+                        refspecs = [f"HEAD:refs/heads/{branch_name}"]
+                        moved_tags = self._get_moved_head_tags(submodule_repo, submodule_remote)
+                        refspecs += [f"+refs/tags/{t}:refs/tags/{t}" for t in moved_tags]
+                        results = submodule_remote.push(refspecs, dry_run=p_dry_run)
                         for info in results:
                             if info.flags & info.ERROR:
                                 raise RuntimeError(f"Push failed: {info.summary}")
                             summary = self._format_push_summary(
-                                submodule_repo, submodule_remote, info, dry_run)
+                                submodule_repo, submodule_remote, info, p_dry_run)
                             msg = f"{Path(submodule.path).name}: {summary}"
                             summaries.append(msg)
 
@@ -1088,9 +1102,49 @@ class GitOperations:
                 except ValueError as e:
                     raise RuntimeError(f"No remote origin configured: {e}") from e
 
-            summaries.extend(self._push_yagso_submodules(submodule_repo, dry_run))
+            summaries.extend(self._push_yagso_submodules(submodule_repo, p_dry_run))
 
         return summaries
+
+    @staticmethod
+    def _get_moved_head_tags(repo: git.Repo, remote: git.Remote) -> List[str]:
+        """Return the names of HEAD tags that point elsewhere on the remote."""
+        head_sha = repo.head.commit.hexsha
+        head_tags = []
+        for tag in repo.tags:
+            try:
+                if tag.commit.hexsha == head_sha:
+                    head_tags.append(tag.name)
+            except ValueError:
+                # Tags pointing at trees or blobs cannot point at HEAD.
+                pass
+        moved_tags = []
+
+        if head_tags:
+            # ls-remote omits peeled "^{}" entries unless they are requested explicitly.
+            patterns = []
+            for name in head_tags:
+                patterns.extend([f"refs/tags/{name}", f"refs/tags/{name}^{{}}"])
+            remote_output = repo.git.ls_remote('--tags', remote.name, *patterns)
+            if not isinstance(remote_output, str):
+                # Default execute() options always yield str; anything else is unexpected.
+                raise TypeError(
+                    f"Unexpected ls-remote output type: {type(remote_output).__name__}")
+            remote_tags = {}
+
+            for line in remote_output.splitlines():
+                parts = line.split('\t', 1)
+                if len(parts) == 2:
+                    remote_tags[parts[1].strip()] = parts[0].strip()
+
+            for name in head_tags:
+                remote_ref = f"refs/tags/{name}"
+                remote_sha = remote_tags.get(
+                    remote_ref + '^{}', remote_tags.get(remote_ref))
+                if remote_sha and remote_sha != head_sha:
+                    moved_tags.append(name)
+
+        return moved_tags
 
     @staticmethod
     def _format_push_summary(repo: git.Repo, remote: git.Remote, info, dry_run: bool) -> str:
