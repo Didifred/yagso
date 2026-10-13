@@ -357,6 +357,8 @@ class TestGitOps(BaseGitTest):
                 blocks = git_ops.read_gitmodules_blocks()
 
                 found = False
+                block = None
+
                 for block in blocks:
                     if block.get("name") == sub_def.name:
                         found = True
@@ -365,7 +367,7 @@ class TestGitOps(BaseGitTest):
             except Exception as e:
                 self.fail(f"add_submodule raised an exception: {e}")
 
-            if found:
+            if found and block is not None:
                 try:
                     git_ops.remove_submodule(block)
                 except Exception as e:
@@ -504,7 +506,7 @@ class TestGitOps(BaseGitTest):
                     ops._checkout_ref_or_commit(repo, 'default')
 
                 tag_name = 'release/1.0'
-                repo.create_tag(tag_name, ref=commit)
+                repo.create_tag(tag_name, ref=commit.hexsha)
 
                 # After the helper, we should be on the repository's default branch.
                 self.assertFalse(repo.head.is_detached)

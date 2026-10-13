@@ -6,6 +6,8 @@ from unittest.mock import patch
 from yagso.core.orchestrator import SubmoduleOrchestrator, DiffStatus
 from yagso.domain.submodule import SubmoduleDefinition
 from tests.common import BaseGitTest
+from yagso.cli.formatter import get_output_formatter
+
 
 # pylint: disable=all
 
@@ -35,7 +37,8 @@ class TestCommitMoveTagsOrchestrator(unittest.TestCase):
 
     def test_commit_changes_move_tags_does_not_load_manifest(self) -> None:
         """Forward the flag without reading a manifest."""
-        orchestrator = SubmoduleOrchestrator(Path('root'))
+        output = get_output_formatter()
+        orchestrator = SubmoduleOrchestrator(Path('root'), output)
         with patch.object(orchestrator.manifest_manager, 'load_manifest') as load, \
                 patch('yagso.core.orchestrator.GitOperations') as operations:
             orchestrator.commit_changes('update', move_tags=True)
@@ -45,7 +48,8 @@ class TestCommitMoveTagsOrchestrator(unittest.TestCase):
 
     def test_commit_changes_default_does_not_load_manifest(self) -> None:
         """Keep the existing commit behavior when tag movement is disabled."""
-        orchestrator = SubmoduleOrchestrator(Path('root'))
+        output = get_output_formatter()
+        orchestrator = SubmoduleOrchestrator(Path('root'), output)
         with patch.object(orchestrator.manifest_manager, 'load_manifest') as load, \
                 patch('yagso.core.orchestrator.GitOperations') as operations:
             orchestrator.commit_changes('update')
@@ -57,14 +61,17 @@ class TestCommitMoveTagsOrchestrator(unittest.TestCase):
 class TestSearchSubmodule(unittest.TestCase):
 
     def setUp(self):
-        self.orch = SubmoduleOrchestrator(Path("."))
+        output = get_output_formatter()
+        self.orch = SubmoduleOrchestrator(Path("."), output)
 
     def test_unchanged(self):
         blocks = [_block()]
         result = self.orch._search_submodule(_sub(), blocks)
         self.assertEqual(result.status, DiffStatus.UNCHANGED)
         self.assertEqual(result.name, "lib1")
-        self.assertEqual(result.block["path"], "lib1")
+        self.assertIsNotNone(result.block)
+        if result.block is not None:
+            self.assertEqual(result.block["path"], "lib1")
         self.assertEqual(blocks, [])
 
     def test_modified_commit(self):
@@ -131,7 +138,8 @@ class TestSearchSubmodule(unittest.TestCase):
 class TestOrchestratorUrlProtocolChange(BaseGitTest):
 
     def test_protocol_change_https_to_ssh_detected(self):
-        orch = SubmoduleOrchestrator(Path('.'))
+        output = get_output_formatter()
+        orch = SubmoduleOrchestrator(Path('.'), output)
         blocks = [{
             "name": "lib1",
             "path": "lib1",
@@ -151,7 +159,8 @@ class TestOrchestratorUrlProtocolChange(BaseGitTest):
         self.assertEqual(searchResult.status, DiffStatus.MODIFIED)
 
     def test_protocol_change_ssh_to_https_detected(self):
-        orch = SubmoduleOrchestrator(Path('.'))
+        output = get_output_formatter()
+        orch = SubmoduleOrchestrator(Path('.'), output)
         blocks = [{
             "name": "lib2",
             "path": "lib2",
