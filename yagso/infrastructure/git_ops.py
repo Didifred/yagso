@@ -121,11 +121,6 @@ class GitOperations:
             raise ValueError("Repository URL is empty")
 
         g = Git()
-        g.update_environment(
-            GIT_TERMINAL_PROMPT="0",  # kills interactive HTTP/HTTPS prompts
-            # kills SSH prompts + adds TCP timeout
-            GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10",
-        )
         try:
             raw_output = g.ls_remote(url, 'HEAD')
             if isinstance(raw_output, tuple):
@@ -1029,7 +1024,7 @@ class GitOperations:
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to commit changes: {e}") from e
 
-    def push_all(self, p_dry_run: bool = False) -> List[str]:
+    def push_all(self, p_dry_run: bool = True) -> List[str]:
         """Push the root and YAGSO-created submodule commits."""
         summaries = []
         try:
@@ -1038,7 +1033,6 @@ class GitOperations:
             remote = self.get_remote(self.repo)
 
             if remote is not None:
-
                 refspecs = None
                 moved_tags = self._get_moved_head_tags(self.repo, remote)
                 if moved_tags:
@@ -1050,7 +1044,9 @@ class GitOperations:
                         branch_name = self.repo.active_branch.name
                     refspecs = [f"HEAD:refs/heads/{branch_name}"]
                     refspecs += [f"+refs/tags/{t}:refs/tags/{t}" for t in moved_tags]
-                results = remote.push(refspecs, dry_run=p_dry_run)
+                    results = remote.push(refspecs, dry_run=p_dry_run)
+                else:
+                    results = remote.push(dry_run=p_dry_run)
 
                 for info in results:
                     if info.flags & info.ERROR:
@@ -1085,10 +1081,15 @@ class GitOperations:
                     if submodule_remote is not None:
                         branch_name = submodule_repo.active_branch.name
 
-                        refspecs = [f"HEAD:refs/heads/{branch_name}"]
                         moved_tags = self._get_moved_head_tags(submodule_repo, submodule_remote)
-                        refspecs += [f"+refs/tags/{t}:refs/tags/{t}" for t in moved_tags]
-                        results = submodule_remote.push(refspecs, dry_run=p_dry_run)
+
+                        if moved_tags:
+                            refspecs = [f"HEAD:refs/heads/{branch_name}"]
+                            refspecs += [f"+refs/tags/{t}:refs/tags/{t}" for t in moved_tags]
+                            results = submodule_remote.push(refspecs, dry_run=p_dry_run)
+                        else:
+                            results = submodule_remote.push(dry_run=p_dry_run)
+
                         for info in results:
                             if info.flags & info.ERROR:
                                 raise RuntimeError(f"Push failed: {info.summary}")

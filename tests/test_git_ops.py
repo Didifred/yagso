@@ -159,7 +159,7 @@ class TestGitOps(BaseGitTest):
 
         git_ops.push_all(p_dry_run=True)
 
-        origin.push.assert_called_once_with(None, dry_run=True)
+        origin.push.assert_called_once_with(dry_run=True)
 
     def test_push_all_force_pushes_only_moved_tags(self):
         git_ops = GitOperations.__new__(GitOperations)
@@ -191,7 +191,7 @@ class TestGitOps(BaseGitTest):
         git_ops.push_all()
 
         remote.push.assert_called_once_with(
-            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'], dry_run=False)
+            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'], dry_run=True)
 
     def test_push_all_uses_local_branch_without_upstream(self):
         git_ops = GitOperations.__new__(GitOperations)
@@ -215,7 +215,7 @@ class TestGitOps(BaseGitTest):
         git_ops.push_all()
 
         remote.push.assert_called_once_with(
-            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'], dry_run=False)
+            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'], dry_run=True)
 
     def test_push_all_raises_on_push_error(self):
         git_ops = GitOperations.__new__(GitOperations)
@@ -317,7 +317,7 @@ class TestGitOps(BaseGitTest):
         git_ops.push_all()
 
         yagso_remote.push.assert_called_once_with(
-            ["HEAD:refs/heads/yagso/test"], dry_run=False)
+            ["HEAD:refs/heads/yagso/test"], dry_run=True)
         user_repo.remote.assert_not_called()
 
     @unittest.skip("Utility method test, not a real test case")
