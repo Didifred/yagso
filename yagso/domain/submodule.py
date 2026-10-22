@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 class SubmoduleDefinition:
     """Represents a single submodule configuration."""
     root_path: str
-    commit: str
-    path: str
+    commit: Optional[str] = None
+    path: Optional[str] = None
     name: Optional[str] = None
     url: Optional[str] = None
     """ The branch to track for this submodule (.gitmodules property).
@@ -82,8 +82,8 @@ class SubmoduleDefinition:
 
         s = cls(
             root_path="",
-            commit=data["commit"],
-            path=data["path"],
+            commit=data.get("commit"),
+            path=data.get("path"),
             name=data.get("name"),
             url=data.get("url"),
             tracking_branch=data.get("tracking_branch"),

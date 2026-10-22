@@ -586,9 +586,13 @@ class GitOperations:
             # Checkout the requested commit expressed by a branch/tag/hash in the submodule
             # Resolve commit-ish (branch/tag/hash) to a local SHA when possible and
             # compare it to the recorded gitlink before performing the checkout.
-            sub_repo_path = self.repo_path / submodule_def.path
-            if not sub_repo_path.exists():
-                raise FileNotFoundError(f"Submodule path does not exist: {sub_repo_path}")
+
+            if submodule_def.path is not None:
+                sub_repo_path = self.repo_path / submodule_def.path
+                if not sub_repo_path.exists():
+                    raise FileNotFoundError(f"Submodule path does not exist: {sub_repo_path}")
+            else:
+                raise FileNotFoundError("Submodule path missing")
 
             current_commit = self.get_recorded_commit(submodule_def.path)
             desired_ref = submodule_def.commit
@@ -688,10 +692,13 @@ class GitOperations:
         desired_commit = submodule_def.commit
 
         # Test first if the submodule path already exists in the repository
-        full_path = self.repo_path / path
-        is_exist = full_path.exists()
-        is_dir = is_exist and full_path.is_dir()
-        is_empty = is_dir and not any(full_path.iterdir())
+        if path is not None:
+            full_path = self.repo_path / path
+            is_exist = full_path.exists()
+            is_dir = is_exist and full_path.is_dir()
+            is_empty = is_dir and not any(full_path.iterdir())
+        else:
+            raise FileNotFoundError("Submodule path missing")
 
         if is_dir and not is_empty:
             if (full_path / '.git').exists():
@@ -1083,6 +1090,8 @@ class GitOperations:
 
                         moved_tags = self._get_moved_head_tags(submodule_repo, submodule_remote)
 
+                        # TODO introduce --force-with-lease option
+                        # TODO when debug is there add --porcelain
                         if moved_tags:
                             refspecs = [f"HEAD:refs/heads/{branch_name}"]
                             refspecs += [f"+refs/tags/{t}:refs/tags/{t}" for t in moved_tags]

@@ -293,6 +293,8 @@ class TestGitOps(BaseGitTest):
         git_ops._repo.active_branch.tracking_branch.return_value = root_tracking_ref
 
         yagso_submodule = MagicMock()
+        yagso_submodule.name = "lib1"
+        yagso_submodule.path = "lib1"
         yagso_submodule.module_exists.return_value = True
         yagso_repo = yagso_submodule.module.return_value
         yagso_repo.head.commit.message = "bump change in lib1 : update"
@@ -307,17 +309,16 @@ class TestGitOps(BaseGitTest):
         yagso_repo.remotes = [yagso_remote]
 
         user_submodule = MagicMock()
+        user_submodule.name = "user-submodule"
+        user_submodule.path = "user-submodule"
         user_submodule.module_exists.return_value = True
         user_repo = user_submodule.module.return_value
         user_repo.head.commit.message = "user commit"
-        user_repo.submodules = []
-
-        git_ops._repo.submodules = [yagso_submodule, user_submodule]
+        user_repo.submodusubmodules = [yagso_submodule, user_submodule]
 
         git_ops.push_all()
 
-        yagso_remote.push.assert_called_once_with(
-            ["HEAD:refs/heads/yagso/test"], dry_run=True)
+        yagso_remote.push.assert_called_once_with(dry_run=True)
         user_repo.remote.assert_not_called()
 
     @unittest.skip("Utility method test, not a real test case")
