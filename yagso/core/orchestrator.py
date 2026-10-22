@@ -164,7 +164,10 @@ class SubmoduleOrchestrator:
                 if search_result.status == DiffStatus.MODIFIED:
                     git_ops.sync_submodule(submodule, search_result.name)
                 elif search_result.status == DiffStatus.MOVED:
-                    git_ops.move_submodule(search_result.name, submodule.path)
+                    if submodule.path is not None:
+                        git_ops.move_submodule(search_result.name, submodule.path)
+                    else:
+                        raise RuntimeError("Submodule path missing")
                 elif search_result.status == DiffStatus.ADDED:
                     git_ops.add_submodule(submodule)
 
@@ -257,10 +260,10 @@ class SubmoduleOrchestrator:
         # No path match, no url+commit+name match — treat as added.
         return SearchResult(DiffStatus.ADDED, submodule.name or "")
 
-    def push_changes(self, dry_run: bool = False) -> List[str]:
-        """Push all commits to remote, optionally without changing remotes."""
+    def push_changes(self, dry_run: bool = False, force_with_lease: bool = False) -> List[str]:
+        """Push commits, optionally force push with leases"""
         with GitOperations(self.repo_path) as git_ops:
-            return git_ops.push_all(dry_run)
+            return git_ops.push_all(dry_run, p_force_with_lease=force_with_lease)
 
     def status_report(self, root_path: Optional[Path] = None) -> bool:
         """Dry-run diff between the manifest (yagso.yaml) and the repository.
@@ -323,7 +326,10 @@ class SubmoduleOrchestrator:
                     self._print_sync_submodule(submodule, search_result)
                     result = True
                 elif search_result.status == DiffStatus.MOVED:
-                    self._print_move_submodule(search_result.name, submodule.path)
+                    if submodule.path is not None:
+                        self._print_move_submodule(search_result.name, submodule.path)
+                    else:
+                        raise RuntimeError("Submodule path missing")
                     result = True
                 elif search_result.status == DiffStatus.ADDED:
                     self._print_add_submodule(submodule)
@@ -369,7 +375,10 @@ class SubmoduleOrchestrator:
             if current_commit is not None:
                 if current_commit != submodule_def.commit:
                     out_current_commit = GitOperations.convert_to_short_sha(current_commit)
-                    out_sub_commit = GitOperations.convert_to_short_sha(submodule_def.commit)
+                    if submodule_def.commit is not None:
+                        out_sub_commit = GitOperations.convert_to_short_sha(submodule_def.commit)
+                    else:
+                        raise RuntimeError("Submodule commit missing")
                     self.output.print(
                         f"  commit change from {out_current_commit} to {out_sub_commit}")
 

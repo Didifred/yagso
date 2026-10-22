@@ -1031,8 +1031,8 @@ class GitOperations:
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to commit changes: {e}") from e
 
-    def push_all(self, p_dry_run: bool = True) -> List[str]:
-        """Push the root and YAGSO-created submodule commits."""
+    def push_all(self, p_dry_run: bool = True, p_force_with_lease: bool = False) -> List[str]:
+        """Push the root and YAGSO-created submodule commits, optionally with force with lease."""
         summaries = []
         try:
 
@@ -1051,9 +1051,11 @@ class GitOperations:
                         branch_name = self.repo.active_branch.name
                     refspecs = [f"HEAD:refs/heads/{branch_name}"]
                     refspecs += [f"+refs/tags/{t}:refs/tags/{t}" for t in moved_tags]
-                    results = remote.push(refspecs, dry_run=p_dry_run)
+                    results = remote.push(
+                        refspecs, dry_run=p_dry_run, force_with_lease=p_force_with_lease)
                 else:
-                    results = remote.push(dry_run=p_dry_run)
+                    results = remote.push(
+                        dry_run=p_dry_run, force_with_lease=p_force_with_lease)
 
                 for info in results:
                     if info.flags & info.ERROR:
@@ -1062,7 +1064,8 @@ class GitOperations:
                     msg = f"{Path(self.repo_path).name}: {summary}"
                     summaries.append(msg)
 
-                summaries.extend(self._push_yagso_submodules(self.repo, p_dry_run))
+                summaries.extend(self._push_yagso_submodules(
+                    self.repo, p_dry_run, p_force_with_lease))
 
         except git.GitCommandError as e:
             raise RuntimeError(f"Failed to push changes: {e}") from e
@@ -1071,7 +1074,8 @@ class GitOperations:
 
         return summaries
 
-    def _push_yagso_submodules(self, repo: git.Repo, p_dry_run: bool) -> List[str]:
+    def _push_yagso_submodules(self, repo: git.Repo, p_dry_run: bool,
+                               p_force_with_lease: bool = False) -> List[str]:
         """Recursively push only submodules whose HEAD was committed by YAGSO."""
         summaries = []
         for submodule in repo.submodules:
@@ -1090,14 +1094,16 @@ class GitOperations:
 
                         moved_tags = self._get_moved_head_tags(submodule_repo, submodule_remote)
 
-                        # TODO introduce --force-with-lease option
                         # TODO when debug is there add --porcelain
                         if moved_tags:
                             refspecs = [f"HEAD:refs/heads/{branch_name}"]
                             refspecs += [f"+refs/tags/{t}:refs/tags/{t}" for t in moved_tags]
-                            results = submodule_remote.push(refspecs, dry_run=p_dry_run)
+                            results = submodule_remote.push(
+                                refspecs, dry_run=p_dry_run,
+                                force_with_lease=p_force_with_lease)
                         else:
-                            results = submodule_remote.push(dry_run=p_dry_run)
+                            results = submodule_remote.push(
+                                dry_run=p_dry_run, force_with_lease=p_force_with_lease)
 
                         for info in results:
                             if info.flags & info.ERROR:
@@ -1112,7 +1118,8 @@ class GitOperations:
                 except ValueError as e:
                     raise RuntimeError(f"No remote origin configured: {e}") from e
 
-            summaries.extend(self._push_yagso_submodules(submodule_repo, p_dry_run))
+            summaries.extend(self._push_yagso_submodules(
+                submodule_repo, p_dry_run, p_force_with_lease))
 
         return summaries
 

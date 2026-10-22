@@ -103,7 +103,7 @@ option. It enables exception tracebacks in the CLI output, for example:
 - **`yagso generate`**: Generates the hierarchy of submodules from a Git root repository 
   and produces a manifest file called `yagso.yaml` at the root of the Git repository.
 
-- **`yagso generate --BOM --files <regex>`**: Generates in addition of the maniest, 
+- **`yagso generate --BOM --files <regex>`**: Generates in addition of the manifest, 
    a bill of material BOM.yaml with an optional regex in order to filer files.
 
 - **`yagso configure`**: Applies the manifest configuration to the repository.
@@ -132,3 +132,5 @@ These latest commands are simple git cli wrapper on a repo and its submodules (-
 
 - **`yagso push --dry-run`**: Reports what would be pushed without pushing changes.
 
+- **`yagso push --force-with-lease`**: Passes Git's `--force-with-lease` to the root
+  repository and eligible submodule pushes. Allows non-fast-forward branch updates only when remote refs match local tracking refs. Can be combined with `--dry-run`.

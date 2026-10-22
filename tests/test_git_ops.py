@@ -1,6 +1,7 @@
 """Test git_ops.py """
 import unittest
 import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import MagicMock, PropertyMock, patch
 
@@ -113,6 +114,92 @@ class TestCommitMoveTags(unittest.TestCase):
                     ops.commit_all('update', move_tags=True)
 
 
+class TestPushGitOps(unittest.TestCase):
+    """Push tests without modifying the shared sample repositories."""
+
+    def test_push_options_reach_root_and_nested_submodules(self) -> None:
+        for dry_run in (False, True):
+            for force_with_lease in (False, True):
+                for moved_tags in ([], ['release']):
+                    with self.subTest(dry_run=dry_run, force_with_lease=force_with_lease,
+                                      moved_tags=moved_tags):
+                        root = MagicMock()
+                        child = MagicMock()
+                        parent = MagicMock()
+                        leaf = MagicMock()
+                        missing = MagicMock()
+                        root.submodules = [child, parent, missing]
+                        child_repo = child.module.return_value
+                        parent_repo = parent.module.return_value
+                        leaf_repo = leaf.module.return_value
+                        child_repo.submodules = []
+                        parent_repo.submodules = [leaf]
+                        leaf_repo.submodules = []
+                        parent_repo.head.commit.message = 'user commit'
+                        missing.module_exists.return_value = False
+                        for repo in (root, child_repo, leaf_repo):
+                            repo.head.commit.message = 'bump change in module : update'
+                            repo.active_branch.name = 'main'
+                            repo.active_branch.tracking_branch.return_value.remote_head = 'main'
+                            repo.remote.return_value.push.return_value = []
+
+                        ops = GitOperations(Path('root'))
+                        ops._repo = root
+                        with patch.object(ops, 'get_remote',
+                                          side_effect=lambda repo: repo.remote()), \
+                                patch.object(ops, '_get_moved_head_tags',
+                                             return_value=moved_tags):
+                            ops.push_all(dry_run, p_force_with_lease=force_with_lease)
+
+                        for repo in (root, child_repo, leaf_repo):
+                            if moved_tags:
+                                repo.remote.return_value.push.assert_called_once_with(
+                                    ['HEAD:refs/heads/main',
+                                     '+refs/tags/release:refs/tags/release'],
+                                    dry_run=dry_run, force_with_lease=force_with_lease)
+                            else:
+                                repo.remote.return_value.push.assert_called_once_with(
+                                    dry_run=dry_run, force_with_lease=force_with_lease)
+                        parent_repo.remote.assert_not_called()
+                        missing.module.assert_not_called()
+
+    def test_force_with_lease_accepts_rewrite_but_rejects_stale_tracking_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+            base = Path(directory)
+            origin = git.Repo.init(base / 'origin.git', bare=True)
+            origin.git.update_environment(GIT_DIR=origin.git_dir)
+            repo = git.Repo.init(base / 'local', initial_branch='main')
+            resources.callback(origin.close)
+            resources.callback(repo.close)
+            actor = git.Actor('YAGSO Test', 'test@example.com')
+            initial = repo.index.commit('initial', author=actor, committer=actor)
+            remote = repo.create_remote('origin', str(base / 'origin.git'))
+            remote.push('main', set_upstream=True)
+            original = repo.index.commit('original', author=actor, committer=actor)
+            remote.push()
+            rewritten = repo.index.commit(
+                'rewritten', parent_commits=[initial], author=actor, committer=actor)
+
+            with GitOperations(base / 'local') as ops:
+                with self.assertRaisesRegex(RuntimeError, 'Push failed'):
+                    ops.push_all(p_dry_run=False)
+                ops.push_all(p_dry_run=True, p_force_with_lease=True)
+                self.assertEqual(origin.git.rev_parse('refs/heads/main'), original.hexsha)
+                ops.push_all(p_dry_run=False, p_force_with_lease=True)
+                self.assertEqual(origin.git.rev_parse('refs/heads/main'), rewritten.hexsha)
+
+                other = git.Repo.clone_from(
+                    str(base / 'origin.git'), base / 'other', branch='main')
+                resources.callback(other.close)
+                advanced = other.index.commit('advanced', author=actor, committer=actor)
+                other.remote().push()
+                repo.index.commit(
+                    'another rewrite', parent_commits=[initial], author=actor, committer=actor)
+                with self.assertRaisesRegex(RuntimeError, 'Push failed'):
+                    ops.push_all(p_dry_run=False, p_force_with_lease=True)
+                self.assertEqual(origin.git.rev_parse('refs/heads/main'), advanced.hexsha)
+
+
 class TestGitOps(BaseGitTest):
 
     def test_get_remote_name_prefers_current_branch_upstream(self):
@@ -159,7 +246,7 @@ class TestGitOps(BaseGitTest):
 
         git_ops.push_all(p_dry_run=True)
 
-        origin.push.assert_called_once_with(dry_run=True)
+        origin.push.assert_called_once_with(dry_run=True, force_with_lease=False)
 
     def test_push_all_force_pushes_only_moved_tags(self):
         git_ops = GitOperations.__new__(GitOperations)
@@ -191,7 +278,8 @@ class TestGitOps(BaseGitTest):
         git_ops.push_all()
 
         remote.push.assert_called_once_with(
-            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'], dry_run=True)
+            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'],
+            dry_run=True, force_with_lease=False)
 
     def test_push_all_uses_local_branch_without_upstream(self):
         git_ops = GitOperations.__new__(GitOperations)
@@ -215,7 +303,8 @@ class TestGitOps(BaseGitTest):
         git_ops.push_all()
 
         remote.push.assert_called_once_with(
-            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'], dry_run=True)
+            ['HEAD:refs/heads/main', '+refs/tags/release:refs/tags/release'],
+            dry_run=True, force_with_lease=False)
 
     def test_push_all_raises_on_push_error(self):
         git_ops = GitOperations.__new__(GitOperations)
@@ -314,11 +403,12 @@ class TestGitOps(BaseGitTest):
         user_submodule.module_exists.return_value = True
         user_repo = user_submodule.module.return_value
         user_repo.head.commit.message = "user commit"
-        user_repo.submodusubmodules = [yagso_submodule, user_submodule]
+        user_repo.submodules = []
+        git_ops._repo.submodules = [yagso_submodule, user_submodule]
 
         git_ops.push_all()
 
-        yagso_remote.push.assert_called_once_with(dry_run=True)
+        yagso_remote.push.assert_called_once_with(dry_run=True, force_with_lease=False)
         user_repo.remote.assert_not_called()
 
     @unittest.skip("Utility method test, not a real test case")

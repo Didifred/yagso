@@ -89,6 +89,27 @@ class TestCommitMoveTagsCLI(unittest.TestCase):
                     orchestrator.commit_changes.assert_called_once_with('update', Path.cwd())
 
 
+class TestPushCLI(unittest.TestCase):
+    """Check push options through the CLI, handler, and orchestrator."""
+
+    def test_push_options_reach_git_operations(self) -> None:
+        for dry_run in (False, True):
+            for force_with_lease in (False, True):
+                with self.subTest(dry_run=dry_run, force_with_lease=force_with_lease):
+                    args = ['push']
+                    if dry_run:
+                        args.append('--dry-run')
+                    if force_with_lease:
+                        args.append('--force-with-lease')
+                    with patch('yagso.core.orchestrator.GitOperations') as operations:
+                        git_ops = operations.return_value.__enter__.return_value
+                        git_ops.push_all.return_value = []
+                        result = CLIController().run(args)
+                    self.assertEqual(result, CLIController.SUCCESS)
+                    git_ops.push_all.assert_called_once_with(
+                        dry_run, p_force_with_lease=force_with_lease)
+
+
 class TestFormatter(unittest.TestCase):
     """Unit tests for OutputFormatter and related functionality."""
 

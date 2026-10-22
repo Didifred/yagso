@@ -102,6 +102,11 @@ class ArgumentParser:
             action="store_true",
             help="Report what would be pushed without pushing changes"
         )
+        _push_parser.add_argument(
+            "--force-with-lease",
+            action="store_true",
+            help="Allow non-fast-forward pushes only if remote refs match local tracking refs"
+        )
 
     def parse(self, args: list) -> Dict[str, Any]:
         """Parse raw arguments into structured options."""
@@ -136,8 +141,7 @@ class ArgumentParser:
             options["move_tags"] = getattr(parsed, "move_tags", False)
         elif parsed.command == "push":
             options["dry_run"] = getattr(parsed, "dry_run", False)
-
-        #  push have no additional options
+            options["force_with_lease"] = getattr(parsed, "force_with_lease", False)
 
         return options
 

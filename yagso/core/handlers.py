@@ -99,7 +99,8 @@ class PushHandler(CommandHandler):
 
     def execute(self, options: Dict[str, Any]) -> None:
         dry_run = options.get("dry_run", False)
-        summaries = self.orchestrator.push_changes(dry_run)
+        force_with_lease = options.get("force_with_lease", False)
+        summaries = self.orchestrator.push_changes(dry_run, force_with_lease)
         if dry_run:
             self.output.info("Command will push :")
             for summary in summaries:
